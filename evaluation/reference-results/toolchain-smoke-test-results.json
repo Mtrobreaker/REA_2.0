@@ -1,0 +1,142 @@
+{
+  "suite": "REA Task 2C Project-Local Toolchain Smoke Test Suite",
+  "timestamp": "2026-11-08 07:25:57 UTC",
+  "environment": {
+    "os": "Windows 11 / WSL2 Ubuntu-24.04",
+    "host_node": "v26.13.0",
+    "host_python": "3.15.0",
+    "host_jdk": "25.0.5.0.3 LTS"
+  },
+  "components": {
+    "xz_utils": {
+      "status": "PASSED",
+      "windows": {
+        "path": "C:\\Users\\acer\\rea\\tools\\xz\\windows\\xz.exe",
+        "sha256": "855aadc2fe3ebc1ecb3b1e38e99dc517dbd12af948ce515cb3749f1b4d5604cf",
+        "version": "xz (XZ Utils) 5.8.4"
+      },
+      "linux_wsl": {
+        "path": "C:\\Users\\acer\\rea\\tools\\xz\\linux-wsl\\xz",
+        "sha256": "9e38d1c49a0817d6c73e49b912a99baf88b8880da472289b43d3e2adfb2b522e",
+        "version": "xz (XZ Utils) 5.4.5"
+      },
+      "tests": [
+        {
+          "name": "windows_xz_version",
+          "passed": true,
+          "output": "xz (XZ Utils) 5.8.4"
+        },
+        {
+          "name": "linux_wsl_xz_version",
+          "passed": true,
+          "output": "xz (XZ Utils) 5.4.5"
+        },
+        {
+          "name": "firmware_squashfs_metadata_block_decompression",
+          "passed": true,
+          "compressed_size": 1656,
+          "decompressed_size": 8192,
+          "output_sha256": "2e1940258923cf6a3608e2a20c12b5706891ed1155193f4ef323b375b84bc117",
+          "windows_success": true,
+          "wsl_success": true,
+          "binary_identity_match": true
+        }
+      ]
+    },
+    "capstone_engine": {
+      "status": "PASSED",
+      "version": "5.0.7",
+      "windows_dll": {
+        "path": "C:\\Users\\acer\\rea\\tools\\capstone\\windows\\capstone.dll",
+        "sha256": "76958e18380023a68fd1714fa2e01c594cc6db1955a07ad6937b66e66dc5d6c3"
+      },
+      "linux_so": {
+        "path": "C:\\Users\\acer\\rea\\tools\\capstone\\linux-wsl\\libcapstone.so",
+        "sha256": "a0897f809e062bdb2a84a6aca71707648e1b9420949b549fe8946f612c22dc84"
+      },
+      "architectures": {
+        "x86_64": {
+          "passed": true,
+          "instruction_count": 7,
+          "decoded_bytes": 22,
+          "total_bytes": 22,
+          "coverage_pct": 100.0
+        },
+        "arm32": {
+          "passed": true,
+          "instruction_count": 5,
+          "decoded_bytes": 20,
+          "total_bytes": 20,
+          "coverage_pct": 100.0
+        },
+        "thumb": {
+          "passed": true,
+          "instruction_count": 7,
+          "decoded_bytes": 16,
+          "total_bytes": 16,
+          "coverage_pct": 100.0
+        },
+        "mips_be": {
+          "passed": true,
+          "instruction_count": 5,
+          "decoded_bytes": 20,
+          "total_bytes": 20,
+          "coverage_pct": 100.0
+        },
+        "mips_le": {
+          "passed": true,
+          "instruction_count": 5,
+          "decoded_bytes": 20,
+          "total_bytes": 20,
+          "coverage_pct": 100.0
+        }
+      },
+      "node_c_ffi_test": {
+        "passed": true,
+        "output_summary": [
+          "[Node Capstone] x86-64    : Decoded 7 insns (22/22 bytes)",
+          "[Node Capstone] ARM32     : Decoded 5 insns (20/20 bytes)",
+          "[Node Capstone] Thumb     : Decoded 7 insns (16/16 bytes)",
+          "[Node Capstone] MIPS-BE   : Decoded 5 insns (20/20 bytes)",
+          "[Node Capstone] MIPS-LE   : Decoded 5 insns (20/20 bytes)",
+          "[Node Capstone] All Node.js in-process C FFI tests PASSED!"
+        ]
+      }
+    },
+    "ghidra_headless": {
+      "status": "PASSED",
+      "ghidra_version": "12.2_PUBLIC (build 20261016)",
+      "jdk_version": "25.0.5.0.3 LTS",
+      "paths": {
+        "runner": "C:\\Users\\acer\\rea\\tools\\ghidra\\run_ghidra_headless.bat",
+        "ghidra_home": "C:\\Users\\acer\\rea\\tools\\ghidra\\distribution\\ghidra_12.2_PUBLIC",
+        "jdk_home": "C:\\Users\\acer\\rea\\tools\\ghidra\\runtime\\jdk-25"
+      },
+      "evaluations": {
+        "x86_64_unstripped": {
+          "passed": true,
+          "function_count": 4,
+          "basic_block_count": 22,
+          "total_cfg_edges": 27,
+          "recovered_functions": [
+            "helper_leaf",
+            "helper_indirect_target",
+            "complex_function",
+            "main"
+          ]
+        },
+        "arm32_stripped": {
+          "passed": true,
+          "function_count": 1,
+          "stripped_recovered_count": 1,
+          "basic_block_count": 10,
+          "recovered_functions": [
+            "FUN_00010018"
+          ]
+        }
+      }
+    }
+  },
+  "elapsed_seconds": 0.64,
+  "overall_status": "ALL_PASSED"
+}

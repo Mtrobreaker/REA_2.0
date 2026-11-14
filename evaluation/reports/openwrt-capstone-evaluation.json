@@ -1,0 +1,254 @@
+[
+  {
+    "binary": "bin/busybox",
+    "sha256": "b24929b9759d38badd1ec2338f594d10de14c74b201eff3eeb86ab507c9a751a",
+    "file_size": 327717,
+    "architecture": "MIPS32 Big-Endian (ath79 MIPS 24Kc ASE MIPS16)",
+    "code_segment": {
+      "vaddr_start": "0x00403b00",
+      "vaddr_end": "0x0044f84c",
+      "total_code_bytes": 310604,
+      "file_offset": 15104
+    },
+    "byte_coverage": {
+      "true_code_denominator_bytes": 310604,
+      "decoded_instruction_bytes": 298624,
+      "literal_pool_bytes": 204,
+      "alignment_padding_bytes": 5130,
+      "unsupported_or_invalid_bytes": 6646,
+      "corrected_byte_coverage_pct": 96.14,
+      "unsupported_instruction_rate_pct": 2.14
+    },
+    "function_recovery": {
+      "total_recovered": 1207,
+      "sources": {
+        "symbol_confirmed": 9,
+        "metadata_confirmed": 3,
+        "direct_call_confirmed": 1062,
+        "prologue_inferred": 133
+      },
+      "verified_boundaries": 847,
+      "inferred_boundaries": 360,
+      "mips16_functions": 1201,
+      "mips32_functions": 6,
+      "direct_calls_discovered": 3993,
+      "indirect_calls_flagged": 30,
+      "indirect_resolution_status": "30 indirect calls preserved as INCONCLUSIVE",
+      "returns_identified": 847
+    },
+    "ghidra_differential": {
+      "ghidra_ground_truth_functions": 1189,
+      "rea_recovered_functions": 1207,
+      "matched_functions_tp": 1135,
+      "false_positives_fp": 72,
+      "false_negatives_fn": 54,
+      "function_precision_pct": 94.03,
+      "function_recall_pct": 95.46,
+      "ghidra_basic_blocks": 19978,
+      "rea_recovered_basic_blocks": 8861,
+      "basic_block_matched_tp": 8171,
+      "basic_block_fp": 690,
+      "basic_block_fn": 11807,
+      "basic_block_precision_pct": 92.21,
+      "basic_block_recall_pct": 40.9,
+      "ghidra_cfg_edges": 36215,
+      "rea_cfg_edges": 10805,
+      "cfg_edge_matched_tp": 9292,
+      "cfg_edge_fp": 1513,
+      "cfg_edge_fn": 26923,
+      "cfg_edge_precision_pct": 86.0,
+      "cfg_edge_recall_pct": 25.66,
+      "mode_transitions_identified": 2,
+      "delay_slots_tracked": 4459
+    }
+  },
+  {
+    "binary": "usr/sbin/dropbear",
+    "sha256": "d7fc7e4ee7ea59ecb4b333890483ea3a428b5ace6a737876cea2aac169832661",
+    "file_size": 264280,
+    "architecture": "MIPS32 Big-Endian (ath79 MIPS 24Kc)",
+    "code_segment": {
+      "vaddr_start": "0x00001fec",
+      "vaddr_end": "0x0002e90c",
+      "total_code_bytes": 182560,
+      "file_offset": 8172
+    },
+    "byte_coverage": {
+      "true_code_denominator_bytes": 182560,
+      "decoded_instruction_bytes": 177234,
+      "literal_pool_bytes": 8,
+      "alignment_padding_bytes": 5150,
+      "unsupported_or_invalid_bytes": 168,
+      "corrected_byte_coverage_pct": 97.08,
+      "unsupported_instruction_rate_pct": 0.09
+    },
+    "function_recovery": {
+      "total_recovered": 482,
+      "sources": {
+        "symbol_confirmed": 168,
+        "metadata_confirmed": 3,
+        "direct_call_confirmed": 287,
+        "prologue_inferred": 24
+      },
+      "verified_boundaries": 66,
+      "inferred_boundaries": 416,
+      "mips16_functions": 0,
+      "mips32_functions": 482,
+      "direct_calls_discovered": 368,
+      "indirect_calls_flagged": 388,
+      "indirect_resolution_status": "388 indirect calls preserved as INCONCLUSIVE",
+      "returns_identified": 66
+    },
+    "ghidra_differential": {
+      "ghidra_ground_truth_functions": 537,
+      "rea_recovered_functions": 482,
+      "matched_functions_tp": 458,
+      "false_positives_fp": 24,
+      "false_negatives_fn": 79,
+      "function_precision_pct": 95.02,
+      "function_recall_pct": 85.29,
+      "ghidra_basic_blocks": 6126,
+      "rea_recovered_basic_blocks": 641,
+      "basic_block_matched_tp": 635,
+      "basic_block_fp": 6,
+      "basic_block_fn": 5491,
+      "basic_block_precision_pct": 99.06,
+      "basic_block_recall_pct": 10.37,
+      "ghidra_cfg_edges": 11479,
+      "rea_cfg_edges": 174,
+      "cfg_edge_matched_tp": 118,
+      "cfg_edge_fp": 56,
+      "cfg_edge_fn": 11361,
+      "cfg_edge_precision_pct": 67.82,
+      "cfg_edge_recall_pct": 1.03,
+      "mode_transitions_identified": 0,
+      "delay_slots_tracked": 9664
+    }
+  },
+  {
+    "binary": "usr/sbin/uhttpd",
+    "sha256": "e0fc103c3edb5ddec4447a6e4627b09edf80e226f826c6c94421cfe19f338c84",
+    "file_size": 66704,
+    "architecture": "MIPS32 Big-Endian (ath79 MIPS 24Kc ASE MIPS16)",
+    "code_segment": {
+      "vaddr_start": "0x00002434",
+      "vaddr_end": "0x00008abc",
+      "total_code_bytes": 26248,
+      "file_offset": 9268
+    },
+    "byte_coverage": {
+      "true_code_denominator_bytes": 26248,
+      "decoded_instruction_bytes": 26154,
+      "literal_pool_bytes": 8,
+      "alignment_padding_bytes": 58,
+      "unsupported_or_invalid_bytes": 28,
+      "corrected_byte_coverage_pct": 99.64,
+      "unsupported_instruction_rate_pct": 0.11
+    },
+    "function_recovery": {
+      "total_recovered": 161,
+      "sources": {
+        "symbol_confirmed": 157,
+        "metadata_confirmed": 3,
+        "direct_call_confirmed": 1,
+        "prologue_inferred": 0
+      },
+      "verified_boundaries": 46,
+      "inferred_boundaries": 115,
+      "mips16_functions": 45,
+      "mips32_functions": 116,
+      "direct_calls_discovered": 1,
+      "indirect_calls_flagged": 367,
+      "indirect_resolution_status": "367 indirect calls preserved as INCONCLUSIVE",
+      "returns_identified": 46
+    },
+    "ghidra_differential": {
+      "ghidra_ground_truth_functions": 163,
+      "rea_recovered_functions": 161,
+      "matched_functions_tp": 161,
+      "false_positives_fp": 0,
+      "false_negatives_fn": 2,
+      "function_precision_pct": 100.0,
+      "function_recall_pct": 98.77,
+      "ghidra_basic_blocks": 931,
+      "rea_recovered_basic_blocks": 515,
+      "basic_block_matched_tp": 507,
+      "basic_block_fp": 8,
+      "basic_block_fn": 424,
+      "basic_block_precision_pct": 98.45,
+      "basic_block_recall_pct": 54.46,
+      "ghidra_cfg_edges": 1629,
+      "rea_cfg_edges": 502,
+      "cfg_edge_matched_tp": 456,
+      "cfg_edge_fp": 46,
+      "cfg_edge_fn": 1173,
+      "cfg_edge_precision_pct": 90.84,
+      "cfg_edge_recall_pct": 27.99,
+      "mode_transitions_identified": 0,
+      "delay_slots_tracked": 744
+    }
+  },
+  {
+    "binary": "lib/libc.so",
+    "sha256": "2fecb30f3a049e44608345dddaa64eff44b6ace31fad5ccfc8e5187c6375b9b0",
+    "file_size": 725268,
+    "architecture": "MIPS32 Big-Endian (ath79 MIPS 24Kc)",
+    "code_segment": {
+      "vaddr_start": "0x00012820",
+      "vaddr_end": "0x000981fc",
+      "total_code_bytes": 547292,
+      "file_offset": 75808
+    },
+    "byte_coverage": {
+      "true_code_denominator_bytes": 547292,
+      "decoded_instruction_bytes": 523880,
+      "literal_pool_bytes": 24,
+      "alignment_padding_bytes": 22814,
+      "unsupported_or_invalid_bytes": 574,
+      "corrected_byte_coverage_pct": 95.72,
+      "unsupported_instruction_rate_pct": 0.1
+    },
+    "function_recovery": {
+      "total_recovered": 1917,
+      "sources": {
+        "symbol_confirmed": 1533,
+        "metadata_confirmed": 3,
+        "direct_call_confirmed": 334,
+        "prologue_inferred": 47
+      },
+      "verified_boundaries": 440,
+      "inferred_boundaries": 1477,
+      "mips16_functions": 0,
+      "mips32_functions": 1917,
+      "direct_calls_discovered": 849,
+      "indirect_calls_flagged": 588,
+      "indirect_resolution_status": "588 indirect calls preserved as INCONCLUSIVE",
+      "returns_identified": 440
+    },
+    "ghidra_differential": {
+      "ghidra_ground_truth_functions": 2015,
+      "rea_recovered_functions": 1917,
+      "matched_functions_tp": 1888,
+      "false_positives_fp": 29,
+      "false_negatives_fn": 127,
+      "function_precision_pct": 98.49,
+      "function_recall_pct": 93.7,
+      "ghidra_basic_blocks": 21064,
+      "rea_recovered_basic_blocks": 2594,
+      "basic_block_matched_tp": 2578,
+      "basic_block_fp": 16,
+      "basic_block_fn": 18486,
+      "basic_block_precision_pct": 99.38,
+      "basic_block_recall_pct": 12.24,
+      "ghidra_cfg_edges": 35199,
+      "rea_cfg_edges": 719,
+      "cfg_edge_matched_tp": 460,
+      "cfg_edge_fp": 259,
+      "cfg_edge_fn": 34739,
+      "cfg_edge_precision_pct": 63.98,
+      "cfg_edge_recall_pct": 1.31,
+      "mode_transitions_identified": 0,
+      "delay_slots_tracked": 33895
+    }
+  }
+]

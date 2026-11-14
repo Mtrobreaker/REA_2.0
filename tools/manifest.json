@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "toolchain_title": "REA Project-Local Reverse Engineering Toolchain",
+  "milestone": "Milestone 4.2",
+  "task": "Task 2C",
+  "generated_at": "2026-11-08T07:25:00Z",
+  "host_environment": {
+    "os": "Windows 11 / WSL2 (Ubuntu 24.04 LTS)",
+    "node_version": "v26.13.0",
+    "python_version": "3.15.0",
+    "java_version": "25.0.5.0.3 LTS"
+  },
+  "tools": [
+    {
+      "id": "xz-utils-windows",
+      "name": "XZ Utils (Windows x86-64 Portable)",
+      "version": "5.8.4",
+      "source": "https://github.com/tukaani-project/xz/releases/download/v5.8.4/xz-5.8.4-windows.zip",
+      "license": "0BSD / Public Domain / LGPL-2.1-or-later",
+      "purpose": "Portable decompression utility for XZ-compressed SquashFS firmware filesystems and data blocks on Windows host",
+      "platform": "windows-x86_64",
+      "binary_path": "tools/xz/windows/xz.exe",
+      "libraries": [
+        {
+          "path": "tools/xz/windows/liblzma.dll",
+          "sha256": "4d1e6b60f9909bcf3db171fc4272b13f50bf47fdcb7a68a2941ab0fd6e369ca0",
+          "size_bytes": 313344
+        }
+      ],
+      "archive": {
+        "path": "tools/xz/windows/xz-5.8.4-windows.zip",
+        "sha256": "f31af7638391ecf286d48bc8555ce6e131691a1c52a9e44303bce57069e9de56",
+        "size_bytes": 1099395
+      },
+      "sha256": "855aadc2fe3ebc1ecb3b1e38e99dc517dbd12af948ce515cb3749f1b4d5604cf",
+      "size_bytes": 109568,
+      "validation_command": "tools\\xz\\windows\\xz.exe --version",
+      "validation_result": "xz (XZ Utils) 5.8.4, liblzma 5.8.4 (exit code 0)",
+      "firmware_test_result": "Decompressed 1656-byte OpenWrt 23.05.0 SquashFS inode table block to 8192 bytes (SHA-256: 2e1940258923cf6a3608e2a20c12b5706891ed1155193f4ef323b375b84bc117)",
+      "failure_behavior": "Returns non-zero exit code (1 on corrupt data, 2 on warning), prints diagnostic error to stderr without host mutation or memory leaks."
+    },
+    {
+      "id": "xz-utils-linux-wsl",
+      "name": "XZ Utils (Linux x86-64 / WSL)",
+      "version": "5.4.5",
+      "source": "Ubuntu 24.04 LTS (liblzma5 / xz-utils distribution package)",
+      "license": "Public Domain / LGPL-2.1-or-later",
+      "purpose": "Reference decompression utility and library for cross-platform validation in WSL environment",
+      "platform": "linux-x86_64",
+      "binary_path": "tools/xz/linux-wsl/xz",
+      "libraries": [
+        {
+          "path": "tools/xz/linux-wsl/liblzma.so.5",
+          "sha256": "26b37d25f7ca2a2d348de8ecabacda12e921cd933b21fa069a179760db77219d",
+          "size_bytes": 202904
+        }
+      ],
+      "sha256": "9e38d1c49a0817d6c73e49b912a99baf88b8880da472289b43d3e2adfb2b522e",
+      "size_bytes": 89008,
+      "validation_command": "wsl tools/xz/linux-wsl/xz --version",
+      "validation_result": "xz (XZ Utils) 5.4.5, liblzma 5.4.5 (exit code 0)",
+      "firmware_test_result": "Decompressed 1656-byte OpenWrt 23.05.0 SquashFS inode table block to 8192 bytes; output binary-identical to Windows xz.exe output",
+      "failure_behavior": "Returns exit code 1 on corrupted block or truncated stream, logs to stderr."
+    },
+    {
+      "id": "capstone-engine-windows",
+      "name": "Capstone Disassembly Engine (Windows Native)",
+      "version": "5.0.9 (Core API 5.0)",
+      "source": "Official Capstone Release Distribution / PyPI Wheels",
+      "license": "BSD-3-Clause",
+      "purpose": "Multi-architecture instruction decoder covering x86-64, ARM32, ARM Thumb-2, MIPS32 LE, and MIPS32 BE with full operand semantics",
+      "platform": "windows-x86_64",
+      "binary_path": "tools/capstone/windows/capstone.dll",
+      "sha256": "76958e18380023a68fd1714fa2e01c594cc6db1955a07ad6937b66e66dc5d6c3",
+      "size_bytes": 7576576,
+      "node_binding": {
+        "framework": "koffi (v3.3.7 fast C FFI)",
+        "binding_script": "tools/capstone/validate_capstone_node.mjs",
+        "in_process_call": true
+      },
+      "supported_architectures": [
+        "x86-64 (CS_ARCH_X86, CS_MODE_64)",
+        "ARM32 A32 (CS_ARCH_ARM, CS_MODE_ARM)",
+        "ARM Thumb / Thumb-2 (CS_ARCH_ARM, CS_MODE_THUMB)",
+        "MIPS32 Little-Endian (CS_ARCH_MIPS, CS_MODE_MIPS32 | CS_MODE_LITTLE_ENDIAN)",
+        "MIPS32 Big-Endian (CS_ARCH_MIPS, CS_MODE_MIPS32 | CS_MODE_BIG_ENDIAN)"
+      ],
+      "validation_command": "node tools/capstone/validate_capstone_node.mjs",
+      "validation_result": "Decoded 100% of bytes across all 5 architectures; x86-64 micro_auth binary achieved 100.0% coverage (405/405 bytes), MIPS binaries achieved 100.0% coverage (756/756 bytes)",
+      "failure_behavior": "cs_open returns non-zero error code (e.g. CS_ERR_ARCH, CS_ERR_MODE); cs_disasm returns 0 instructions and safely sets output pointer to NULL on invalid input without crashing."
+    },
+    {
+      "id": "capstone-engine-linux",
+      "name": "Capstone Disassembly Engine (Linux Native)",
+      "version": "5.0.9 (Core API 5.0)",
+      "source": "Official Capstone ManyLinux2014 Wheel",
+      "license": "BSD-3-Clause",
+      "purpose": "Cross-platform reference library for Linux/WSL execution and parity validation",
+      "platform": "linux-x86_64",
+      "binary_path": "tools/capstone/linux-wsl/libcapstone.so",
+      "sha256": "a0897f809e062bdb2a84a6aca71707648e1b9420949b549fe8946f612c22dc84",
+      "size_bytes": 9600600,
+      "validation_command": "wsl python3 -c \"import ctypes; lib = ctypes.CDLL('tools/capstone/linux-wsl/libcapstone.so'); print('Loaded libcapstone.so:', lib)\"",
+      "validation_result": "Successfully loaded shared object in Linux runtime with valid ELF symbols",
+      "failure_behavior": "DLOpen exception on missing symbols or corrupted library."
+    },
+    {
+      "id": "ghidra-headless",
+      "name": "Ghidra Software Reverse Engineering Framework (Headless Analyzer)",
+      "version": "12.2_PUBLIC (build 20261016)",
+      "source": "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip",
+      "license": "Apache-2.0",
+      "purpose": "Independent ground-truth reference tool for function recovery, basic block segmentation, control-flow graph extraction, and stripped symbol reconstruction",
+      "platform": "windows-x86_64 / multi-platform Java",
+      "binary_path": "tools/ghidra/distribution/ghidra_12.2_PUBLIC/support/analyzeHeadless.bat",
+      "distribution_archive": {
+        "path": "tools/ghidra/ghidra_12.2_PUBLIC_20261016.zip",
+        "sha256": "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67",
+        "size_bytes": 569712708
+      },
+      "runtime_dependency": {
+        "name": "Java Development Kit (JDK 25 LTS)",
+        "version": "25.0.5.0.3",
+        "local_junction_path": "tools/ghidra/runtime/jdk-25",
+        "isolation_guarantee": "Invoked solely via project-local environment variables within run_ghidra_headless.bat; no system JAVA_HOME modification"
+      },
+      "validation_command": "tools\\ghidra\\run_ghidra_headless.bat C:\\Users\\acer\\REA-EVALUATION-LAB\\binary-corpus\\x86_64_micro_auth_o0.elf",
+      "validation_result": "Completed headless import and analysis in 2.0s; ExportGroundTruth.java exported 4 functions (helper_leaf, helper_indirect_target, complex_function, main) and 22 basic blocks with all CFG edges to tools/ghidra/output_x86_64_micro_auth_o0.elf.json",
+      "stripped_test_result": "Recovered stripped function FUN_00010018 with 10 basic blocks and 28 instructions on arm32_le_micro_auth_o2_stripped.elf",
+      "failure_behavior": "Returns non-zero exit code, discards temporary project directory (-deleteProject), and writes crash diagnostics to application.log without host corruption."
+    }
+  ]
+}
+

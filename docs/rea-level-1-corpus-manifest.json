@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "corpus_version": "1.0.0",
+  "milestone": "4.2",
+  "audit_status": "APPROVED_WITH_REMEDIATION",
+  "generated_at": "2026-11-08T09:35:00Z",
+  "samples": [
+    {
+      "sample_id": "SMP-L1-A01",
+      "track": "TRACK_A_INSTRUCTION_DECODING",
+      "category": "multi_arch_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth ARM32 Little-Endian (O0)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf32",
+      "architecture": {
+        "isa": "arm",
+        "endianness": "little",
+        "bitness": 32,
+        "abi": "AAPCS",
+        "float_abi": "soft"
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O0",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "expected_metrics": {
+        "min_boundary_accuracy": 1.0,
+        "min_size_accuracy": 1.0,
+        "reference_tool": "llvm-objdump-18"
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "UNAUDITED_DECODING_TARGET",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["ARM A32 mode only, does not test Thumb-2 variable width switching"]
+    },
+    {
+      "sample_id": "SMP-L1-A02",
+      "track": "TRACK_A_INSTRUCTION_DECODING",
+      "category": "multi_arch_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth ARM Thumb (O0)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf32",
+      "architecture": {
+        "isa": "arm_thumb",
+        "endianness": "little",
+        "bitness": 32,
+        "abi": "AAPCS",
+        "float_abi": "soft"
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O0",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "expected_metrics": {
+        "min_boundary_accuracy": 1.0,
+        "min_size_accuracy": 1.0,
+        "reference_tool": "llvm-objdump-18"
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "UNAUDITED_DECODING_TARGET",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Variable-width 16-bit and 32-bit Thumb-2 instructions"]
+    },
+    {
+      "sample_id": "SMP-L1-A03",
+      "track": "TRACK_A_INSTRUCTION_DECODING",
+      "category": "multi_arch_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth MIPS32 Big-Endian (O0)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf32",
+      "architecture": {
+        "isa": "mips",
+        "endianness": "big",
+        "bitness": 32,
+        "abi": "O32",
+        "float_abi": "soft"
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O0",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "expected_metrics": {
+        "min_boundary_accuracy": 1.0,
+        "min_size_accuracy": 1.0,
+        "reference_tool": "llvm-objdump-18"
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "UNAUDITED_DECODING_TARGET",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Requires big-endian instruction word swapping and delay slot modeling"]
+    },
+    {
+      "sample_id": "SMP-L1-A04",
+      "track": "TRACK_A_INSTRUCTION_DECODING",
+      "category": "multi_arch_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth MIPS32 Little-Endian (O0)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf32",
+      "architecture": {
+        "isa": "mips",
+        "endianness": "little",
+        "bitness": 32,
+        "abi": "O32",
+        "float_abi": "soft"
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O0",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "expected_metrics": {
+        "min_boundary_accuracy": 1.0,
+        "min_size_accuracy": 1.0,
+        "reference_tool": "llvm-objdump-18"
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "UNAUDITED_DECODING_TARGET",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Tests delay slot execution order in little-endian MIPS binaries"]
+    },
+    {
+      "sample_id": "SMP-L1-A05",
+      "track": "TRACK_A_INSTRUCTION_DECODING",
+      "category": "multi_arch_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth x86-64 (O0)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf64",
+      "architecture": {
+        "isa": "x86_64",
+        "endianness": "little",
+        "bitness": 64,
+        "abi": "System V AMD64"
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "gcc-13",
+        "optimization_level": "O0",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "expected_metrics": {
+        "expected_coverage": 0.043,
+        "expected_outcome": "PARTIAL",
+        "reference_tool": "llvm-objdump-18"
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "UNAUDITED_DECODING_TARGET",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": [
+        "Deliberately included to expose known in-process x86-64 decoder coverage limitations (~4.3%)",
+        "Must degrade cleanly to INCONCLUSIVE without crashing"
+      ]
+    },
+    {
+      "sample_id": "SMP-L1-B01",
+      "track": "TRACK_B_STRUCTURE_RECOVERY",
+      "category": "optimized_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth ARM32 Optimized with Symbols (O2)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf32",
+      "architecture": {
+        "isa": "arm",
+        "endianness": "little",
+        "bitness": 32,
+        "abi": "AAPCS"
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O2",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "expected_metrics": {
+        "expected_cfg_blocks": 12,
+        "expected_cfg_edges": 14,
+        "reference_tool": "llvm-objdump-18"
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "UNAUDITED_STRUCTURE_TARGET",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Evaluates basic block partitioning under compiler inlining and register renaming"]
+    },
+    {
+      "sample_id": "SMP-L1-B02",
+      "track": "TRACK_B_STRUCTURE_RECOVERY",
+      "category": "stripped_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth ARM32 Stripped (O2)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf32",
+      "architecture": {
+        "isa": "arm",
+        "endianness": "little",
+        "bitness": 32,
+        "abi": "AAPCS"
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O2",
+        "is_stripped": true,
+        "has_debug_info": false
+      },
+      "expected_metrics": {
+        "target_function_recovery": "prologue_heuristics",
+        "reference_tool": "radare2"
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "UNAUDITED_STRUCTURE_TARGET",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Requires function boundary recovery without symbol table or DWARF metadata"]
+    },
+    {
+      "sample_id": "SMP-L1-C01",
+      "track": "TRACK_C_FIRMWARE_EXTRACTION",
+      "category": "embedded_firmware_squashfs",
+      "testing_level": "L3_FULL_FIRMWARE",
+      "name": "OpenWrt 23.05.0 Minimal Rootfs (MIPS ATH79)",
+      "verification_status": "VERIFIED",
+      "file_format": "squashfs_4_0",
+      "architecture": {
+        "isa": "mips",
+        "endianness": "big",
+        "bitness": 32,
+        "abi": "O32"
+      },
+      "provenance": {
+        "source_type": "open_source_repo",
+        "original_url": "https://downloads.openwrt.org/releases/23.05.0/targets/ath79/generic/openwrt-23.05.0-ath79-generic-rootfs.tar.gz",
+        "license": "GPL-2.0",
+        "redistributable": true,
+        "manufacturer": "OpenWrt Project",
+        "model": "Generic ATH79",
+        "firmware_version": "23.05.0"
+      },
+      "expected_contents": {
+        "expected_files_count": 312,
+        "key_binaries": ["/bin/busybox", "/lib/ld-musl-mips-sf.so.1"]
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "OPENWRT_STOCK_BASELINE",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Stock official distribution; evaluated strictly for extraction accuracy, symlink resolution, and inventory"]
+    },
+    {
+      "sample_id": "SMP-L1-D01",
+      "track": "TRACK_D_VULNERABILITY_PAIRS",
+      "category": "vulnerable_patched_pair",
+      "testing_level": "L2_REAL_BINARY",
+      "name": "BusyBox 1.35.0 awk (CVE-2022-30065 Vulnerable)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf64",
+      "architecture": {
+        "isa": "x86_64",
+        "endianness": "little",
+        "bitness": 64,
+        "abi": "System V AMD64"
+      },
+      "provenance": {
+        "source_type": "cve_benchmark",
+        "original_url": "https://busybox.net/downloads/busybox-1.35.0.tar.bz2",
+        "license": "GPL-2.0-only",
+        "redistributable": true,
+        "software_version": "1.35.0"
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O0",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "CVE-2022-30065",
+          "status": "PRESENT",
+          "cwe": ["CWE-416"],
+          "target_function": "evaluate",
+          "sink_api": "copyvar",
+          "trigger_condition": "Processing temporary variable under case XC( OC_MOVE ) returns unmanaged temp slot",
+          "cvss_v31_vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+          "base_score": 7.8,
+          "patch_pair_sample_id": "SMP-L1-D02",
+          "patch_commit_or_diff": "git commit e63d7cdfdac78c6fd27e9e63150335767592b85e"
+        }
+      ],
+      "known_limitations": ["Vulnerability manifests as heap use-after-free; static CFG model must track variable lifetime"]
+    },
+    {
+      "sample_id": "SMP-L1-D02",
+      "track": "TRACK_D_VULNERABILITY_PAIRS",
+      "category": "vulnerable_patched_pair",
+      "testing_level": "L2_REAL_BINARY",
+      "name": "BusyBox 1.36.0 awk (CVE-2022-30065 Fixed)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf64",
+      "architecture": {
+        "isa": "x86_64",
+        "endianness": "little",
+        "bitness": 64,
+        "abi": "System V AMD64"
+      },
+      "provenance": {
+        "source_type": "cve_benchmark",
+        "original_url": "https://busybox.net/downloads/busybox-1.36.0.tar.bz2",
+        "license": "GPL-2.0-only",
+        "redistributable": true,
+        "software_version": "1.36.0"
+      },
+      "compiler_toolchain": {
+        "compiler": "clang-18",
+        "optimization_level": "O0",
+        "is_stripped": false,
+        "has_debug_info": true
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "CVE-2022-30065",
+          "status": "ABSENT",
+          "cwe": ["CWE-416"],
+          "target_function": "evaluate",
+          "sink_api": "copyvar",
+          "trigger_condition": "Patched with if (L.v == TMPVAR0) L.v = res; preventing temporary variable leak",
+          "patch_pair_sample_id": "SMP-L1-D01"
+        }
+      ],
+      "known_limitations": ["Must verify vulnerability is completely resolved without breaking awk functionality"]
+    },
+    {
+      "sample_id": "SMP-L1-E01",
+      "track": "TRACK_E_PROTECTIONS",
+      "category": "protected_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth Hardened (Full Mitigations)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf64",
+      "architecture": {
+        "isa": "x86_64",
+        "endianness": "little",
+        "bitness": 64
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "gcc-13",
+        "security_flags": {
+          "pie": true,
+          "stack_canary": true,
+          "nx_dep": true,
+          "relro": "full",
+          "fortify_source": true
+        }
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "PROTECTION_VALIDATION",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Tests REA binary protection detector: PIE, CANARY, NX, FULL_RELRO must be detected"]
+    },
+    {
+      "sample_id": "SMP-L1-E02",
+      "track": "TRACK_E_PROTECTIONS",
+      "category": "protected_elf",
+      "testing_level": "L1_SYNTHETIC_MICRO",
+      "name": "Micro-Auth Unprotected (Zero Mitigations)",
+      "verification_status": "VERIFIED",
+      "file_format": "elf64",
+      "architecture": {
+        "isa": "x86_64",
+        "endianness": "little",
+        "bitness": 64
+      },
+      "provenance": {
+        "source_type": "synthetic_controlled",
+        "original_url": "file:///c:/Users/acer/rea/scripts/fixtures/micro_auth.c",
+        "license": "MIT",
+        "redistributable": true
+      },
+      "compiler_toolchain": {
+        "compiler": "gcc-13",
+        "security_flags": {
+          "pie": false,
+          "stack_canary": false,
+          "nx_dep": false,
+          "relro": "none",
+          "fortify_source": false
+        }
+      },
+      "vulnerabilities": [
+        {
+          "vulnerability_id": "PROTECTION_VALIDATION",
+          "status": "UNKNOWN",
+          "cwe": [],
+          "sink_api": "none"
+        }
+      ],
+      "known_limitations": ["Tests REA binary protection detector: absence of mitigations and executable stack must be flagged"]
+    }
+  ]
+}
+
