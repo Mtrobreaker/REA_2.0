@@ -8,7 +8,6 @@ import {
   deviceInspectionSchema,
   embeddedOsAuditSchema,
   generateSecurityReportSchema,
-  hardwareRtlInspectionSchema,
   runMultiAgentAssessmentSchema,
   scanSecurityTargetSchema,
 } from "../contracts/securitySchemas.js";
@@ -75,12 +74,6 @@ export const registerSecurityTools = (
             lower.endsWith(".squashfs")
           ) {
             assetType = "firmware_image";
-          } else if (
-            lower.endsWith(".v") ||
-            lower.endsWith(".sv") ||
-            lower.endsWith(".vh")
-          ) {
-            assetType = "hardware_rtl";
           } else {
             // Check for SquashFS magic without relying purely on extensions
             let isSquash = false;
@@ -200,10 +193,16 @@ export const registerSecurityTools = (
             extracted_files: 0,
             eligible_binaries: assetType === "compiled_binary" ? 1 : 0,
             binaries_analyzed:
-              discovery.value.executed_scanners.length > 0 && assetType === "compiled_binary" ? 1 : 0,
+              discovery.value.executed_scanners.length > 0 &&
+              assetType === "compiled_binary"
+                ? 1
+                : 0,
             binaries_partially_analyzed: 0,
             binaries_skipped_or_failed:
-              discovery.value.status === "NOT_SCANNED" && assetType === "compiled_binary" ? 1 : 0,
+              discovery.value.status === "NOT_SCANNED" &&
+              assetType === "compiled_binary"
+                ? 1
+                : 0,
           },
         };
 
@@ -321,7 +320,7 @@ export const registerSecurityTools = (
     "security_multiagent_assess",
     {
       description:
-        "Execute end-to-end multi-agent cybersecurity team assessment across all asset classes (software, binaries, firmware, and hardware RTL).",
+        "Execute end-to-end multi-agent cybersecurity team assessment across all asset classes (software, binaries, firmware, and device interfaces).",
       inputSchema: runMultiAgentAssessmentSchema,
     },
     async (input) => {
@@ -502,44 +501,4 @@ export const registerSecurityTools = (
       };
     },
   );
-
-  // 8. security_hardware_rtl_inspect (deprecated, routes to device interface analyzer)
-  server.registerTool(
-    "security_hardware_rtl_inspect",
-    {
-      description:
-        "Inspect hardware device interface security (deprecated, use security_device_inspect).",
-      inputSchema: hardwareRtlInspectionSchema,
-    },
-    async (input) => {
-      const result = await defaultDeviceInterfaceAnalyzer.analyze({
-        target: input.path,
-      });
-      if (!result.ok) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                { status: "ERROR", error: result.error.message },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(result.value, null, 2),
-          },
-        ],
-      };
-    },
-  );
 };
-

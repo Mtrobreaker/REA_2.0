@@ -64,7 +64,9 @@ export class ReconnaissanceAgent implements SecurityAgent {
             size_bytes: stats.size,
           });
           discoveredAssets.push(fileAsset);
-          actions.push(`Identified singular asset ${fileAsset.name} as ${type}`);
+          actions.push(
+            `Identified singular asset ${fileAsset.name} as ${type}`,
+          );
         }
       } catch (error: unknown) {
         // File may be virtual, unreadable, or missing
@@ -116,11 +118,6 @@ export class ReconnaissanceAgent implements SecurityAgent {
       case ".rom":
       case ".fw":
         return "firmware_image";
-      case ".v":
-      case ".sv":
-      case ".vh":
-      case ".svh":
-        return "hardware_rtl";
       case ".tty":
       case ".com":
       case ".dtb":
@@ -193,4 +190,3 @@ export class ReconnaissanceAgent implements SecurityAgent {
     return assets;
   }
 }
-

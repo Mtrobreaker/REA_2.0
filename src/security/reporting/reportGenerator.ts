@@ -1,7 +1,4 @@
-import type {
-  AssessmentMetrics,
-  AssessmentState,
-} from "../../domain/security/assessment.js";
+import type { AssessmentState } from "../../domain/security/assessment.js";
 import type {
   FindingLocation,
   SecurityFinding,
@@ -11,7 +8,12 @@ import { SecurityKnowledgeGraph } from "../graph/knowledgeGraph.js";
 export type ReportFormat = "markdown" | "json" | "sarif" | "html";
 
 export interface ScanExecutionMetadata {
-  readonly status: "NOT_SCANNED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+  readonly status:
+    | "NOT_SCANNED"
+    | "RUNNING"
+    | "COMPLETED"
+    | "PARTIAL"
+    | "FAILED";
   readonly selected_scanners: readonly string[];
   readonly executed_scanners: readonly string[];
   readonly completed_scanners: readonly string[];
@@ -19,7 +21,10 @@ export interface ScanExecutionMetadata {
   readonly skipped_scanners: readonly string[];
   readonly scanner_warnings: readonly string[];
   readonly unsupported_input_types: readonly string[];
-  readonly extraction_gaps?: readonly { readonly path: string; readonly reason: string }[];
+  readonly extraction_gaps?: readonly {
+    readonly path: string;
+    readonly reason: string;
+  }[];
   readonly coverage: {
     readonly discovered_files: number;
     readonly extracted_files: number;
@@ -34,7 +39,7 @@ export interface GenerateReportOptions {
   readonly assessment: AssessmentState;
   readonly format?: ReportFormat;
   readonly title?: string;
-  readonly scanExecution?: ScanExecutionMetadata;
+  readonly scanExecution?: ScanExecutionMetadata | undefined;
 }
 
 /**
@@ -49,7 +54,11 @@ export class SecurityReportGenerator {
     const format = options.format ?? "markdown";
     switch (format) {
       case "markdown":
-        return this.generateMarkdown(options.assessment, options.title, options.scanExecution);
+        return this.generateMarkdown(
+          options.assessment,
+          options.title,
+          options.scanExecution,
+        );
       case "json":
         return this.generateJson(options.assessment, options.scanExecution);
       case "sarif":
@@ -76,9 +85,14 @@ export class SecurityReportGenerator {
     lines.push("");
     lines.push(`**Assessment ID:** \`${assessment.assessment_id}\`  `);
     lines.push(`**Phase:** \`${assessment.phase.toUpperCase()}\`  `);
+    if (scanExecution) {
+      lines.push(`**Scan Execution Status:** \`${scanExecution.status}\`  `);
+    }
     lines.push(`**Created:** ${assessment.created_at}  `);
     lines.push(`**Completed:** ${assessment.completed_at ?? "In Progress"}  `);
-    lines.push(`**Authorized By:** ${assessment.scope.authorized_by} (Ref: \`${assessment.scope.authorization_reference}\`)  `);
+    lines.push(
+      `**Authorized By:** ${assessment.scope.authorized_by} (Ref: \`${assessment.scope.authorization_reference}\`)  `,
+    );
     lines.push("");
 
     // 1. Executive Summary
@@ -89,6 +103,19 @@ export class SecurityReportGenerator {
         `A total of **${assessment.findings.length}** security finding(s) were identified across **${assessment.assets.length}** evaluated asset(s).`,
     );
     lines.push("");
+    if (
+      scanExecution &&
+      (scanExecution.status === "PARTIAL" ||
+        scanExecution.status === "NOT_SCANNED")
+    ) {
+      lines.push(
+        `> **⚠️ ${scanExecution.status} Analysis Coverage Notice:** This assessment completed with status \`${scanExecution.status}\` ` +
+          `(${scanExecution.coverage.binaries_analyzed} of ${scanExecution.coverage.eligible_binaries} eligible ELF binaries analyzed; ` +
+          `${scanExecution.coverage.binaries_skipped_or_failed} binaries skipped or unanalyzed). ` +
+          `Partial or unexecuted analysis must NEVER be interpreted as a clean or vulnerability-free posture.`,
+      );
+      lines.push("");
+    }
 
     // Metrics Dashboard Table
     lines.push("### Security Posture Metrics");
@@ -128,7 +155,9 @@ export class SecurityReportGenerator {
         lines.push(`  - \`${t}\``);
       }
     }
-    lines.push(`- **Active Verification Allowed:** \`${assessment.scope.allow_active_verification}\``);
+    lines.push(
+      `- **Active Verification Allowed:** \`${assessment.scope.allow_active_verification}\``,
+    );
     lines.push(`- **Scope Valid Until:** \`${assessment.scope.valid_until}\``);
     lines.push("");
 
@@ -137,26 +166,55 @@ export class SecurityReportGenerator {
       lines.push("## 2.1. Scan Execution & Truthful Coverage");
       lines.push("");
       lines.push(`- **Scan Status:** \`${scanExecution.status}\``);
-      lines.push(`- **Selected Scanners:** ${scanExecution.selected_scanners.length > 0 ? scanExecution.selected_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`);
-      lines.push(`- **Actually Executed Scanners:** ${scanExecution.executed_scanners.length > 0 ? scanExecution.executed_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`);
-      lines.push(`- **Successfully Completed Scanners:** ${scanExecution.completed_scanners.length > 0 ? scanExecution.completed_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`);
-      lines.push(`- **Failed Scanners:** ${scanExecution.failed_scanners.length > 0 ? scanExecution.failed_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`);
-      lines.push(`- **Skipped Scanners:** ${scanExecution.skipped_scanners.length > 0 ? scanExecution.skipped_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`);
-      lines.push(`- **Scanner Warnings:** ${scanExecution.scanner_warnings.length > 0 ? scanExecution.scanner_warnings.join("; ") : "*None*"}`);
-      lines.push(`- **Unsupported Input Types:** ${scanExecution.unsupported_input_types.length > 0 ? scanExecution.unsupported_input_types.join(", ") : "*None*"}`);
-      if (scanExecution.extraction_gaps && scanExecution.extraction_gaps.length > 0) {
+      lines.push(
+        `- **Selected Scanners:** ${scanExecution.selected_scanners.length > 0 ? scanExecution.selected_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`,
+      );
+      lines.push(
+        `- **Actually Executed Scanners:** ${scanExecution.executed_scanners.length > 0 ? scanExecution.executed_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`,
+      );
+      lines.push(
+        `- **Successfully Completed Scanners:** ${scanExecution.completed_scanners.length > 0 ? scanExecution.completed_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`,
+      );
+      lines.push(
+        `- **Failed Scanners:** ${scanExecution.failed_scanners.length > 0 ? scanExecution.failed_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`,
+      );
+      lines.push(
+        `- **Skipped Scanners:** ${scanExecution.skipped_scanners.length > 0 ? scanExecution.skipped_scanners.map((s) => `\`${s}\``).join(", ") : "*None*"}`,
+      );
+      lines.push(
+        `- **Scanner Warnings:** ${scanExecution.scanner_warnings.length > 0 ? scanExecution.scanner_warnings.join("; ") : "*None*"}`,
+      );
+      lines.push(
+        `- **Unsupported Input Types:** ${scanExecution.unsupported_input_types.length > 0 ? scanExecution.unsupported_input_types.join(", ") : "*None*"}`,
+      );
+      if (
+        scanExecution.extraction_gaps &&
+        scanExecution.extraction_gaps.length > 0
+      ) {
         lines.push("- **Extraction Gaps:**");
         for (const gap of scanExecution.extraction_gaps) {
           lines.push(`  - \`${gap.path}\`: ${gap.reason}`);
         }
       }
       lines.push("- **File & Binary Analysis Coverage:**");
-      lines.push(`  - Discovered files: **${scanExecution.coverage.discovered_files}**`);
-      lines.push(`  - Extracted files: **${scanExecution.coverage.extracted_files}**`);
-      lines.push(`  - Eligible binaries: **${scanExecution.coverage.eligible_binaries}**`);
-      lines.push(`  - Binaries analyzed: **${scanExecution.coverage.binaries_analyzed}**`);
-      lines.push(`  - Binaries partially analyzed: **${scanExecution.coverage.binaries_partially_analyzed}**`);
-      lines.push(`  - Binaries skipped or failed: **${scanExecution.coverage.binaries_skipped_or_failed}**`);
+      lines.push(
+        `  - Discovered files: **${scanExecution.coverage.discovered_files}**`,
+      );
+      lines.push(
+        `  - Extracted files: **${scanExecution.coverage.extracted_files}**`,
+      );
+      lines.push(
+        `  - Eligible binaries: **${scanExecution.coverage.eligible_binaries}**`,
+      );
+      lines.push(
+        `  - Binaries analyzed: **${scanExecution.coverage.binaries_analyzed}**`,
+      );
+      lines.push(
+        `  - Binaries partially analyzed: **${scanExecution.coverage.binaries_partially_analyzed}**`,
+      );
+      lines.push(
+        `  - Binaries skipped or failed: **${scanExecution.coverage.binaries_skipped_or_failed}**`,
+      );
       lines.push("");
     }
 
@@ -173,6 +231,54 @@ export class SecurityReportGenerator {
           `| **${a.name}** | \`${a.type}\` | \`${a.path ?? "N/A"}\` | \`${a.architecture ?? "N/A"}\` |`,
         );
       }
+
+      const analyzedBinaries = assessment.assets.filter(
+        (a) =>
+          a.type === "compiled_binary" &&
+          a.metadata?.lifecycle_state === "analyzed",
+      );
+      const skippedBinaries = assessment.assets.filter(
+        (a) =>
+          a.type === "compiled_binary" &&
+          (a.metadata?.lifecycle_state === "skipped_budget" ||
+            a.metadata?.lifecycle_state === "failed" ||
+            a.metadata?.skipped === true),
+      );
+
+      if (analyzedBinaries.length > 0 || skippedBinaries.length > 0) {
+        lines.push("");
+        lines.push("### 3.1. ELF Binary Analysis & Skipped Binary Inventory");
+        lines.push("");
+        lines.push(
+          `- **Analyzed ELF Binaries (${analyzedBinaries.length}):** ` +
+            (analyzedBinaries.length > 0
+              ? analyzedBinaries
+                  .map(
+                    (b) =>
+                      `\`${String(b.metadata?.relativePath ?? b.path ?? b.name)}\``,
+                  )
+                  .join(", ")
+              : "*None*"),
+        );
+        lines.push(
+          `- **Skipped / Unanalyzed ELF Binaries (${skippedBinaries.length}):**`,
+        );
+        if (skippedBinaries.length === 0) {
+          lines.push("  - *None*");
+        } else {
+          for (const sb of skippedBinaries) {
+            const rel = String(sb.metadata?.relativePath ?? sb.path ?? sb.name);
+            const reason = String(
+              sb.metadata?.skipped_reason ??
+                sb.metadata?.error ??
+                "Skipped due to task budget",
+            );
+            lines.push(
+              `  - \`${rel}\` (\`${sb.architecture ?? "unknown"}\`): ${reason}`,
+            );
+          }
+        }
+      }
     }
     lines.push("");
 
@@ -182,7 +288,9 @@ export class SecurityReportGenerator {
 
     if (assessment.findings.length === 0) {
       if (scanExecution?.status === "NOT_SCANNED") {
-        lines.push("*NOT_SCANNED: No security scanners were executed against the target.*");
+        lines.push(
+          "*NOT_SCANNED: No security scanners were executed against the target.*",
+        );
       } else if (scanExecution?.status === "PARTIAL") {
         lines.push(
           `*No findings detected within partial analysis coverage (${scanExecution.completed_scanners.join(", ") || "partial"}). Unanalyzed areas remain unexamined.*`,
@@ -203,27 +311,39 @@ export class SecurityReportGenerator {
         lines.push(`### 4.${i + 1}. [${sevBadge}] ${f.name}`);
         lines.push("");
         lines.push(`- **Finding ID:** \`${f.id}\``);
-        lines.push(`- **Affected Asset:** \`${f.affected_asset.name}\` (${f.affected_asset.type})`);
+        lines.push(
+          `- **Affected Asset:** \`${f.affected_asset.name}\` (${f.affected_asset.type})`,
+        );
         lines.push(`- **Location:** ${this.formatLocation(f.location)}`);
         lines.push(
           `- **CVSS v3.1:** **${f.severity.cvss_score ?? "N/A"}** (\`${f.severity.cvss_vector ?? "N/A"}\`)`,
         );
-        lines.push(`- **Verification Status:** \`${f.verification_status}\` (Confidence: \`${f.confidence.level}\`)`);
+        lines.push(
+          `- **Verification Status:** \`${f.verification_status}\` (Confidence: \`${f.confidence.level}\`)`,
+        );
         lines.push(`- **Remediation Priority:** \`${f.remediation.priority}\``);
 
         // Classification
         const classParts: string[] = [];
         if (f.classification.cve.length > 0) {
-          classParts.push(`CVE: ${f.classification.cve.map((c) => `\`${c}\``).join(", ")}`);
+          classParts.push(
+            `CVE: ${f.classification.cve.map((c) => `\`${c}\``).join(", ")}`,
+          );
         }
         if (f.classification.cwe.length > 0) {
-          classParts.push(`CWE: ${f.classification.cwe.map((c) => `\`${c}\``).join(", ")}`);
+          classParts.push(
+            `CWE: ${f.classification.cwe.map((c) => `\`${c}\``).join(", ")}`,
+          );
         }
         if (f.classification.mitre_attack.length > 0) {
-          classParts.push(`ATT&CK: ${f.classification.mitre_attack.map((m) => `\`${m}\``).join(", ")}`);
+          classParts.push(
+            `ATT&CK: ${f.classification.mitre_attack.map((m) => `\`${m}\``).join(", ")}`,
+          );
         }
         if (f.classification.owasp.length > 0) {
-          classParts.push(`OWASP: ${f.classification.owasp.map((o) => `\`${o}\``).join(", ")}`);
+          classParts.push(
+            `OWASP: ${f.classification.owasp.map((o) => `\`${o}\``).join(", ")}`,
+          );
         }
         if (classParts.length > 0) {
           lines.push(`- **Classification:** ${classParts.join(" | ")}`);
@@ -256,7 +376,11 @@ export class SecurityReportGenerator {
         // Reproduction Steps
         if (f.reproduction_steps.length > 0) {
           lines.push("#### Controlled Reproduction Steps");
-          for (let stepIdx = 0; stepIdx < f.reproduction_steps.length; stepIdx++) {
+          for (
+            let stepIdx = 0;
+            stepIdx < f.reproduction_steps.length;
+            stepIdx++
+          ) {
             lines.push(`${stepIdx + 1}. ${f.reproduction_steps[stepIdx]}`);
           }
           lines.push("");
@@ -282,18 +406,26 @@ export class SecurityReportGenerator {
         }
 
         if (f.remediation.validation_procedure) {
-          lines.push(`**Validation Procedure:** ${f.remediation.validation_procedure}`);
+          lines.push(
+            `**Validation Procedure:** ${f.remediation.validation_procedure}`,
+          );
           lines.push("");
         }
 
         // Evidence & Provenance
         lines.push("#### Provenance & Evidence");
-        lines.push(`- **Discovered By:** \`${f.provenance.discovered_by}\` at \`${f.provenance.discovered_at}\``);
+        lines.push(
+          `- **Discovered By:** \`${f.provenance.discovered_by}\` at \`${f.provenance.discovered_at}\``,
+        );
         if (f.provenance.verified_by) {
-          lines.push(`- **Verified By:** \`${f.provenance.verified_by}\` at \`${f.provenance.verified_at}\``);
+          lines.push(
+            `- **Verified By:** \`${f.provenance.verified_by}\` at \`${f.provenance.verified_at}\``,
+          );
         }
         if (f.evidence_ids.length > 0) {
-          lines.push(`- **Associated Evidence IDs:** ${f.evidence_ids.map((id) => `\`${id}\``).join(", ")}`);
+          lines.push(
+            `- **Associated Evidence IDs:** ${f.evidence_ids.map((id) => `\`${id}\``).join(", ")}`,
+          );
         }
         lines.push("");
         lines.push("---");
@@ -308,7 +440,9 @@ export class SecurityReportGenerator {
     lines.push("## 5. Multi-Hop Attack Path Analysis & Exploit Chaining");
     lines.push("");
     if (attackPaths.length === 0) {
-      lines.push("*No chained multi-hop exploit paths detected across the analyzed finding inventory.*");
+      lines.push(
+        "*No chained multi-hop exploit paths detected across the analyzed finding inventory.*",
+      );
     } else {
       lines.push(
         `Identified **${attackPaths.length}** composite exploit chain(s) linking independent vulnerabilities:`,
@@ -316,12 +450,18 @@ export class SecurityReportGenerator {
       lines.push("");
       for (let pIdx = 0; pIdx < attackPaths.length; pIdx++) {
         const path = attackPaths[pIdx]!;
-        lines.push(`### 5.${pIdx + 1}. [${path.overall_severity}] ${path.title}`);
-        lines.push(`- **Cumulative Chain Risk:** **${path.cumulative_risk}/10.0**`);
+        lines.push(
+          `### 5.${pIdx + 1}. [${path.overall_severity}] ${path.title}`,
+        );
+        lines.push(
+          `- **Cumulative Chain Risk:** **${path.cumulative_risk}/10.0**`,
+        );
         lines.push(`- **Exploit Steps:**`);
         for (let sIdx = 0; sIdx < path.steps.length; sIdx++) {
           const step = path.steps[sIdx]!;
-          lines.push(`  ${sIdx + 1}. **${step.fromNode.label}** ➔ ${step.explanation}`);
+          lines.push(
+            `  ${sIdx + 1}. **${step.fromNode.label}** ➔ ${step.explanation}`,
+          );
         }
         lines.push(`- **Narrative:** ${path.narrative}`);
         lines.push("");
@@ -351,7 +491,54 @@ export class SecurityReportGenerator {
     scanExecution?: ScanExecutionMetadata,
   ): string {
     if (scanExecution) {
-      return JSON.stringify({ ...assessment, scan_execution: scanExecution }, null, 2);
+      const analyzedBinaries = assessment.assets
+        .filter(
+          (a) =>
+            a.type === "compiled_binary" &&
+            a.metadata?.lifecycle_state === "analyzed",
+        )
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          relativePath: String(a.metadata?.relativePath ?? a.path ?? a.name),
+          architecture: a.architecture,
+          sha256: a.digest?.sha256 ?? null,
+          partiallyAnalyzed: Boolean(a.metadata?.partially_analyzed),
+        }));
+      const skippedBinaries = assessment.assets
+        .filter(
+          (a) =>
+            a.type === "compiled_binary" &&
+            (a.metadata?.lifecycle_state === "skipped_budget" ||
+              a.metadata?.lifecycle_state === "failed" ||
+              a.metadata?.skipped === true),
+        )
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          relativePath: String(a.metadata?.relativePath ?? a.path ?? a.name),
+          architecture: a.architecture,
+          sha256: a.digest?.sha256 ?? null,
+          lifecycleState: String(
+            a.metadata?.lifecycle_state ?? "skipped_budget",
+          ),
+          reason: String(
+            a.metadata?.skipped_reason ??
+              a.metadata?.error ??
+              "Skipped due to task budget",
+          ),
+        }));
+      return JSON.stringify(
+        {
+          ...assessment,
+          scan_status: scanExecution.status,
+          scan_execution: scanExecution,
+          analyzed_binaries: analyzedBinaries,
+          skipped_binaries: skippedBinaries,
+        },
+        null,
+        2,
+      );
     }
     return JSON.stringify(assessment, null, 2);
   }
@@ -364,7 +551,10 @@ export class SecurityReportGenerator {
     const results: any[] = [];
 
     for (const f of assessment.findings) {
-      const ruleId = f.classification.cve[0] ?? f.classification.cwe[0] ?? f.name.replace(/\s+/g, "-");
+      const ruleId =
+        f.classification.cve[0] ??
+        f.classification.cwe[0] ??
+        f.name.replace(/\s+/g, "-");
 
       if (!rulesMap.has(ruleId)) {
         rulesMap.set(ruleId, {
@@ -435,7 +625,8 @@ export class SecurityReportGenerator {
     }
 
     const sarifLog = {
-      $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+      $schema:
+        "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
       version: "2.1.0",
       runs: [
         {
@@ -458,7 +649,10 @@ export class SecurityReportGenerator {
   /**
    * Generate a modern, self-contained interactive HTML report.
    */
-  public generateHtml(assessment: AssessmentState, customTitle?: string): string {
+  public generateHtml(
+    assessment: AssessmentState,
+    customTitle?: string,
+  ): string {
     const title = customTitle ?? assessment.objective.title;
     const sorted = [...assessment.findings].sort(this.compareFindingSeverity);
 
@@ -703,7 +897,10 @@ export class SecurityReportGenerator {
     return parts.length > 0 ? parts.join(", ") : "Global / Unspecified";
   }
 
-  private compareFindingSeverity(a: SecurityFinding, b: SecurityFinding): number {
+  private compareFindingSeverity(
+    a: SecurityFinding,
+    b: SecurityFinding,
+  ): number {
     const weights: Record<string, number> = {
       CRITICAL: 5,
       HIGH: 4,
@@ -719,19 +916,27 @@ export class SecurityReportGenerator {
     return (b.severity.cvss_score ?? 0) - (a.severity.cvss_score ?? 0);
   }
 
-  private countVerified(findings: readonly SecurityFinding[], level: string): number {
+  private countVerified(
+    findings: readonly SecurityFinding[],
+    level: string,
+  ): number {
     return findings.filter(
       (f) => f.severity.level === level && f.verification_status === "VERIFIED",
     ).length;
   }
 
-  private countUnverified(findings: readonly SecurityFinding[], level: string): number {
+  private countUnverified(
+    findings: readonly SecurityFinding[],
+    level: string,
+  ): number {
     return findings.filter(
       (f) => f.severity.level === level && f.verification_status !== "VERIFIED",
     ).length;
   }
 
-  private severityToSarifLevel(level: string): "error" | "warning" | "note" | "none" {
+  private severityToSarifLevel(
+    level: string,
+  ): "error" | "warning" | "note" | "none" {
     switch (level) {
       case "CRITICAL":
       case "HIGH":
@@ -773,4 +978,3 @@ export class SecurityReportGenerator {
 }
 
 export const defaultReportGenerator = new SecurityReportGenerator();
-

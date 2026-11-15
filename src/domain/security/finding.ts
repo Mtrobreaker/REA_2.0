@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { digestCanonicalValue } from "../canonicalDigest.js";
 import { nulFreeStringSchema } from "../localPath.js";
-import {
-  assetIdSchema,
-  assetTypeSchema,
-  type AssetId,
-  type AssetType,
-} from "./asset.js";
+import { assetIdSchema, assetTypeSchema, type AssetId } from "./asset.js";
 import {
   exploitabilityTierSchema,
   remediationPrioritySchema,
@@ -14,12 +9,6 @@ import {
   securityConfidenceLevelSchema,
   securitySeverityLevelSchema,
   verificationStatusSchema,
-  type ExploitabilityTier,
-  type RemediationPriority,
-  type SecurityClassification,
-  type SecurityConfidenceLevel,
-  type SecuritySeverityLevel,
-  type VerificationStatus,
 } from "./classification.js";
 
 /**
@@ -29,6 +18,11 @@ import {
 export type FindingId = `fnd_${string}`;
 
 export const findingIdPattern = /^fnd_[a-f0-9]{64}$/u;
+export const evidenceIdPattern =
+  /^ev_(?:(?:dec|cfg|rch|tnt|wit)_[a-f0-9]{32}|meta_[a-f0-9]{16,64}|[a-f0-9]{64})$/u;
+export const evidenceIdSchema = z
+  .string()
+  .regex(evidenceIdPattern, "Invalid Evidence ID");
 
 export const findingIdSchema = z
   .string()
@@ -133,7 +127,14 @@ export const securityFindingSchema = z.strictObject({
   technical_description: z.string().min(1),
   root_cause: z.string().min(1),
   evidence_ids: z
-    .array(z.string().regex(/^ev_[a-f0-9]{64}$/u))
+    .array(
+      z
+        .string()
+        .regex(
+          /^ev_(?:(?:dec|cfg|rch|tnt|wit)_[a-f0-9]{32}|meta_[a-f0-9]{16,64}|[a-f0-9]{64})$/u,
+          "Invalid Evidence ID (expected trusted stage evidence ID ev_<stage>_<32hex> or ev_<64hex>)",
+        ),
+    )
     .default([]),
   reproduction_steps: z.array(z.string()).default([]),
   impact: findingImpactSchema,

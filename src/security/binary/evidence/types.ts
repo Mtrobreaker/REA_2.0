@@ -37,7 +37,10 @@ export interface SealedInvestigationManifest {
 }
 
 export interface SealingError {
-  readonly code: "INTEGRITY_COMPROMISED" | "VERIFICATION_FAILED" | "STORAGE_ERROR";
+  readonly code:
+    | "INTEGRITY_COMPROMISED"
+    | "VERIFICATION_FAILED"
+    | "STORAGE_ERROR";
   readonly message: string;
   readonly details?: unknown;
 }
@@ -46,7 +49,12 @@ export interface SealingError {
 // Sprint 3B: Trusted Analysis Evidence Types & Contracts
 // ============================================================================
 
-export type AnalysisStage = "DECODER" | "CFG" | "REACHABILITY" | "TAINT" | "WITNESS";
+export type AnalysisStage =
+  | "DECODER"
+  | "CFG"
+  | "REACHABILITY"
+  | "TAINT"
+  | "WITNESS";
 
 export interface DecoderCompletenessClaim {
   readonly isComplete: boolean;
@@ -206,8 +214,25 @@ export interface CanonicalSanitizerGuard {
   readonly dominatesSink: boolean;
 }
 
+export type StageEvaluationStatus =
+  | "NOT_ATTEMPTED"
+  | "UNSUPPORTED"
+  | "INCONCLUSIVE"
+  | "SATISFIABLE"
+  | "UNSATISFIABLE"
+  | "PROVEN";
+
 export interface TaintPayload {
-  readonly status: "PROVEN_TAINT" | "NO_TAINT" | "MITIGATED_TAINT" | "INCONCLUSIVE";
+  readonly status:
+    | "PROVEN_TAINT"
+    | "NO_TAINT"
+    | "MITIGATED_TAINT"
+    | "INCONCLUSIVE"
+    | "NOT_ATTEMPTED"
+    | "UNSUPPORTED";
+  readonly stageStatus?: StageEvaluationStatus | undefined;
+  readonly ruleId?: string | undefined;
+  readonly category?: string | undefined;
   readonly source: {
     readonly kind: string;
     readonly api: string;
@@ -240,9 +265,18 @@ export interface WitnessPayload {
   readonly findingId: string;
   readonly ruleId: string;
   readonly category: string;
+  readonly sinkApi?: string | undefined;
+  readonly stageStatus?: StageEvaluationStatus | undefined;
+  readonly satisfiabilityStatus?: StageEvaluationStatus | undefined;
   readonly isSatisfiable: boolean;
   readonly isReproducible: boolean;
-  readonly exploitabilityStatus: "PROVEN" | "THEORETICAL" | "UNSATISFIABLE";
+  readonly exploitabilityStatus:
+    | "PROVEN"
+    | "THEORETICAL"
+    | "UNSATISFIABLE"
+    | "NOT_ATTEMPTED"
+    | "UNSUPPORTED"
+    | "INCONCLUSIVE";
   readonly conflictingGuards: readonly string[];
   readonly validationLog: readonly string[];
   readonly constraints: readonly CanonicalWitnessConstraint[];

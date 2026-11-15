@@ -120,10 +120,14 @@ export class ChiefSecurityOrchestrator implements SecurityAgent {
       remediation: [],
     };
 
-    const postMessage = (msg: Omit<AgentMessage, "message_id" | "timestamp">) => {
+    const postMessage = (
+      msg: Omit<AgentMessage, "message_id" | "timestamp">,
+    ) => {
       const timestamp = new Date().toISOString();
       const hash = createHash("sha256")
-        .update(`${msg.sender}:${msg.recipient}:${timestamp}:${messages.length}`)
+        .update(
+          `${msg.sender}:${msg.recipient}:${timestamp}:${messages.length}`,
+        )
         .digest("hex");
       messages.push({
         ...msg,
@@ -143,7 +147,9 @@ export class ChiefSecurityOrchestrator implements SecurityAgent {
       ...(this.packboard ? { packboard: this.packboard } : {}),
     });
 
-    const runAgent = async (role: AgentRole): Promise<Result<void, OrchestrationError>> => {
+    const runAgent = async (
+      role: AgentRole,
+    ): Promise<Result<void, OrchestrationError>> => {
       if (signal?.aborted) {
         return err({
           phase: currentState.phase,
@@ -190,11 +196,17 @@ export class ChiefSecurityOrchestrator implements SecurityAgent {
     currentState = { ...currentState, phase: "vulnerability_discovery" };
     agentLogs.orchestrator.push("Starting Phase 2: Vulnerability Discovery");
 
-    const hasSource = currentState.assets.some((a) => a.type === "source_repository");
-    const hasBinary = currentState.assets.some((a) => a.type === "compiled_binary");
-    const hasFirmware = currentState.assets.some((a) => a.type === "firmware_image");
+    const hasSource = currentState.assets.some(
+      (a) => a.type === "source_repository",
+    );
+    const hasBinary = currentState.assets.some(
+      (a) => a.type === "compiled_binary",
+    );
+    const hasFirmware = currentState.assets.some(
+      (a) => a.type === "firmware_image",
+    );
     const hasHardware = currentState.assets.some(
-      (a) => a.type === "device_hardware" || a.type === "hardware_rtl",
+      (a) => a.type === "device_hardware",
     );
 
     if (hasSource) {
@@ -222,19 +234,25 @@ export class ChiefSecurityOrchestrator implements SecurityAgent {
     if (!mwRes.ok) return mwRes;
 
     // --- Phase 3: Threat Intelligence Correlation ---
-    agentLogs.orchestrator.push("Starting Phase 3: Threat Intelligence Correlation");
+    agentLogs.orchestrator.push(
+      "Starting Phase 3: Threat Intelligence Correlation",
+    );
     const tiRes = await runAgent("threat_intelligence");
     if (!tiRes.ok) return tiRes;
 
     // --- Phase 4: Independent Verification ---
     currentState = { ...currentState, phase: "verification" };
-    agentLogs.orchestrator.push("Starting Phase 4: Finding Verification & False-Positive Elimination");
+    agentLogs.orchestrator.push(
+      "Starting Phase 4: Finding Verification & False-Positive Elimination",
+    );
     const vfRes = await runAgent("verification");
     if (!vfRes.ok) return vfRes;
 
     // --- Phase 5: Remediation Strategy ---
     currentState = { ...currentState, phase: "remediation" };
-    agentLogs.orchestrator.push("Starting Phase 5: Remediation & Patch Formulation");
+    agentLogs.orchestrator.push(
+      "Starting Phase 5: Remediation & Patch Formulation",
+    );
     const rmRes = await runAgent("remediation");
     if (!rmRes.ok) return rmRes;
 

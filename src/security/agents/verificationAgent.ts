@@ -92,53 +92,90 @@ export class VulnerabilityVerificationAgent implements SecurityAgent {
 
       let newStatus: VerificationStatus = finding.verification_status;
       let confidenceLevel = finding.confidence.level;
-      const notes: string[] = [...finding.confidence.false_positive_considerations];
+      const notes: string[] = [
+        ...finding.confidence.false_positive_considerations,
+      ];
 
       if (isTestFile && finding.severity.level !== "CRITICAL") {
         newStatus = "FALSE_POSITIVE";
-        notes.push("Identified within test, mock, or fixture path; unlikely to be exposed in production.");
-        actions.push(`Classified finding '${finding.name}' as FALSE_POSITIVE (test directory fixture).`);
+        notes.push(
+          "Identified within test, mock, or fixture path; unlikely to be exposed in production.",
+        );
+        actions.push(
+          `Classified finding '${finding.name}' as FALSE_POSITIVE (test directory fixture).`,
+        );
       } else {
-        // Run multi-stage adjudication
-        const claimedGuard = finding.remediation?.validation_procedure;
-        const hasEvidence = Array.isArray(finding.evidence_ids) && finding.evidence_ids.length > 0;
+        // Run multi-stage adjudication (NEVER confuse remediation prose with a claimed source-code guard,
+        // and NEVER promote to VERIFIED without verified source code and cryptographic evidence).
+        const hasEvidence =
+          Array.isArray(finding.evidence_ids) &&
+          finding.evidence_ids.length > 0;
 
-        if (!hasEvidence && !claimedGuard) {
-          newStatus = finding.verification_status === "CANDIDATE" ? "CANDIDATE" : "UNVERIFIED";
+        if (!hasEvidence) {
+          newStatus =
+            finding.verification_status === "CANDIDATE"
+              ? "CANDIDATE"
+              : "UNVERIFIED";
           confidenceLevel = "TENTATIVE";
-          actions.push(`Retaining finding '${finding.name}' as ${newStatus} (insufficient evidence or missing source context).`);
+          actions.push(
+            `Retaining finding '${finding.name}' as ${newStatus} (missing trusted evidence).`,
+          );
         } else {
-          const decision = this.adjudicateCandidate(finding, undefined, claimedGuard);
+          const decision = this.adjudicateCandidate(
+            finding,
+            undefined,
+            undefined,
+          );
 
           if (decision.outcome === "CONFIRMED_MITIGATED") {
             newStatus = "FALSE_POSITIVE";
-            notes.push(`Adjudication verified mitigating guard: ${decision.reasoning}`);
-            actions.push(`Dismissed finding '${finding.name}' as mitigated by verified guard.`);
+            notes.push(
+              `Adjudication verified mitigating guard: ${decision.reasoning}`,
+            );
+            actions.push(
+              `Dismissed finding '${finding.name}' as mitigated by verified guard.`,
+            );
           } else if (decision.outcome === "FLAWED_GUARD") {
             if (hasEvidence) {
               newStatus = "VERIFIED";
-              notes.push(`Adjudication detected flawed guard: ${decision.reasoning}`);
-              actions.push(`Verified finding '${finding.name}' despite claimed guard (${decision.reasoning}).`);
+              notes.push(
+                `Adjudication detected flawed guard: ${decision.reasoning}`,
+              );
+              actions.push(
+                `Verified finding '${finding.name}' despite claimed guard (${decision.reasoning}).`,
+              );
             } else {
               newStatus = "UNVERIFIED";
               confidenceLevel = "TENTATIVE";
-              notes.push(`Adjudication detected flawed guard but lacks underlying evidence: ${decision.reasoning}`);
-              actions.push(`Flagged finding '${finding.name}' as UNVERIFIED (lacks evidence).`);
+              notes.push(
+                `Adjudication detected flawed guard but lacks underlying evidence: ${decision.reasoning}`,
+              );
+              actions.push(
+                `Flagged finding '${finding.name}' as UNVERIFIED (lacks evidence).`,
+              );
             }
           } else if (decision.outcome === "INCONCLUSIVE") {
             newStatus = "UNVERIFIED";
             confidenceLevel = "TENTATIVE";
             notes.push(`Adjudication inconclusive: ${decision.reasoning}`);
-            actions.push(`Flagged finding '${finding.name}' as INCONCLUSIVE (${decision.reasoning}).`);
+            actions.push(
+              `Flagged finding '${finding.name}' as INCONCLUSIVE (${decision.reasoning}).`,
+            );
           } else {
             if (hasEvidence) {
               newStatus = "VERIFIED";
-              actions.push(`Verified finding '${finding.name}' through deterministic rule evidence.`);
+              actions.push(
+                `Verified finding '${finding.name}' through deterministic rule evidence.`,
+              );
             } else {
               newStatus = "UNVERIFIED";
               confidenceLevel = "TENTATIVE";
-              notes.push("Missing verified source code or evidence; cannot confirm vulnerability.");
-              actions.push(`Retaining finding '${finding.name}' as UNVERIFIED (missing evidence).`);
+              notes.push(
+                "Missing verified source code or evidence; cannot confirm vulnerability.",
+              );
+              actions.push(
+                `Retaining finding '${finding.name}' as UNVERIFIED (missing evidence).`,
+              );
             }
           }
         }
@@ -154,8 +191,14 @@ export class VulnerabilityVerificationAgent implements SecurityAgent {
         },
         provenance: {
           ...finding.provenance,
-          verified_by: newStatus === "VERIFIED" ? "verification-agent" : finding.provenance.verified_by,
-          verified_at: newStatus === "VERIFIED" ? timestamp : finding.provenance.verified_at,
+          verified_by:
+            newStatus === "VERIFIED"
+              ? "verification-agent"
+              : finding.provenance.verified_by,
+          verified_at:
+            newStatus === "VERIFIED"
+              ? timestamp
+              : finding.provenance.verified_at,
         },
       };
 

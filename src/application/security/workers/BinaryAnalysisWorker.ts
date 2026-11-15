@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
-import { ok, err, type Result } from "../../../domain/result.js";
+import { randomUUID } from "node:crypto";
+import type { Result } from "../../../domain/result.js";
 import type { AssessmentId } from "../../../domain/security/assessment.js";
 import type {
   ICentralBlackboard,
@@ -9,11 +9,17 @@ import type {
 import type { IContextProjector } from "../../../domain/security/blackboard/contextProjection.js";
 import type { BlackboardError } from "../../../domain/security/blackboard/errors.js";
 import { AgentWorker } from "../coordinator/AgentWorker.js";
-import type { WorkerConfig, TaskExecutionHandler } from "../coordinator/coordinatorTypes.js";
+import type {
+  WorkerConfig,
+  TaskExecutionHandler,
+} from "../coordinator/coordinatorTypes.js";
 import { BinaryAnalysisBridge } from "../../../security/binary/BinaryAnalysisBridge.js";
 import { VulnerabilityCandidateDetector } from "../../../security/binary/VulnerabilityCandidateDetector.js";
 import { VulnerabilityAdjudicationBridge } from "../../../security/binary/VulnerabilityAdjudicationBridge.js";
-import type { BinaryAnalysisReport, SecurityFinding } from "../../../domain/security/binary/types.js";
+import type {
+  BinaryAnalysisReport,
+  SecurityFinding,
+} from "../../../domain/security/binary/types.js";
 import type { BinaryWorkerSupervisor } from "../../../security/binary/supervisor/BinaryWorkerSupervisor.js";
 import type {
   ParentEvidenceValidator,
@@ -61,7 +67,8 @@ export class BinaryAnalysisWorker {
   ) {
     this.bridge = options?.bridge ?? new BinaryAnalysisBridge();
     this.detector = options?.detector ?? new VulnerabilityCandidateDetector();
-    this.adjudicator = options?.adjudicator ?? new VulnerabilityAdjudicationBridge();
+    this.adjudicator =
+      options?.adjudicator ?? new VulnerabilityAdjudicationBridge();
     this.supervisor = options?.supervisor;
     this.validator = options?.validator;
     this.authority = options?.authority;
@@ -75,14 +82,20 @@ export class BinaryAnalysisWorker {
       leaseDurationMs: options?.workerConfig?.leaseDurationMs ?? 3000,
       heartbeatIntervalMs: options?.workerConfig?.heartbeatIntervalMs ?? 500,
       taskTimeoutMs: options?.workerConfig?.taskTimeoutMs ?? 10_000,
-      maxTaskCeilingRenewals: options?.workerConfig?.maxTaskCeilingRenewals ?? 5,
+      maxTaskCeilingRenewals:
+        options?.workerConfig?.maxTaskCeilingRenewals ?? 5,
       maxRetries: options?.workerConfig?.maxRetries ?? 3,
     };
 
     const handler: TaskExecutionHandler = (task, context, signal) =>
       this.handleBinaryAnalysisTask(task, context, signal);
 
-    this.worker = new AgentWorker(config, blackboard, contextProjector, handler);
+    this.worker = new AgentWorker(
+      config,
+      blackboard,
+      contextProjector,
+      handler,
+    );
   }
 
   public async start(): Promise<Result<void, BlackboardError>> {
@@ -117,7 +130,10 @@ export class BinaryAnalysisWorker {
     }
 
     // 2. Fetch Target Asset Record
-    const assetRes = await this.blackboard.assets.findById(this.assessmentId, task.asset_id);
+    const assetRes = await this.blackboard.assets.findById(
+      this.assessmentId,
+      task.asset_id,
+    );
     if (!assetRes.ok || !assetRes.value) {
       throw new Error(
         `Failed to locate asset ${task.asset_id} for task ${task.id}: ${assetRes.ok ? "not found" : assetRes.error.message}`,
@@ -133,7 +149,8 @@ export class BinaryAnalysisWorker {
     );
 
     if (existingObs.ok && existingObs.value.length > 0) {
-      const cached = existingObs.value[0]!.value as BinaryAnalysisExecutionResult;
+      const cached = existingObs.value[0]!
+        .value as BinaryAnalysisExecutionResult;
       return cached;
     }
 
@@ -146,7 +163,11 @@ export class BinaryAnalysisWorker {
       asset.path;
 
     let rawBuffer = (taskMetadata?.buffer as any) ?? (metadata?.buffer as any);
-    if (rawBuffer && !Buffer.isBuffer(rawBuffer) && Array.isArray(rawBuffer.data)) {
+    if (
+      rawBuffer &&
+      !Buffer.isBuffer(rawBuffer) &&
+      Array.isArray(rawBuffer.data)
+    ) {
       rawBuffer = Buffer.from(rawBuffer.data);
     }
     const targetBuffer = Buffer.isBuffer(rawBuffer) ? rawBuffer : undefined;
@@ -173,12 +194,33 @@ export class BinaryAnalysisWorker {
 
     if (this.supervisor && this.validator && this.authority) {
       // Execute analysis via isolated child worker supervisor
-      const binarySha256 = (asset.digest?.sha256 ?? createHash("sha256").update(targetBuffer ?? "").digest("hex")) as string;
-      const firmwareSha256 = (metadata?.firmwareSha256 as string) ?? binarySha256;
-      const architecture = ((metadata?.architecture as string) ?? "ARM") as any;
+      const binarySha256 = (asset.digest?.sha256 ??
+        report.metadata.sha256) as string;
+      const firmwareSha256 =
+        (metadata?.firmwareSha256 as string) ?? binarySha256;
+      const rawArch =
+        asset.architecture ??
+        report.metadata.architecture ??
+        (metadata?.architecture as string) ??
+        "ARM";
+      const mappedArch =
+        rawArch === "MIPS"
+          ? report.metadata.endianness === "big"
+            ? "MIPS_BE"
+            : "MIPS_LE"
+          : rawArch === "x86_64" ||
+              rawArch === "ARM" ||
+              rawArch === "ARM32" ||
+              rawArch === "Thumb" ||
+              rawArch === "MIPS_BE" ||
+              rawArch === "MIPS_LE"
+            ? rawArch
+            : "ARM";
 
-      const runManager = this.authority.getRunManager();
-      const run = runManager.startRun(this.assessmentId, asset.id, binarySha256);
+      const normalizedTaskId = task.id.startsWith("tsk_")
+        ? task.id
+        : `tsk_${task.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+      const effectiveFencingToken = Math.max(1, task.fencing_token);
 
       let binaryInput: BinaryWorkerAnalyzeRequest["binaryInput"];
       if (targetBuffer) {
@@ -190,34 +232,50 @@ export class BinaryAnalysisWorker {
           read_only: true,
         };
       } else if (targetPath) {
+        const byteSize =
+          (metadata?.size as number) ?? (metadata?.byteSize as number) ?? 1024;
         binaryInput = {
           type: "file_path",
           path: targetPath,
           expected_sha256: binarySha256,
-          byte_size: (metadata?.byteSize as number) ?? 1024,
+          byte_size: Math.max(1, byteSize),
           read_only: true,
         };
       } else {
-        throw new Error(`Asset ${asset.id} has no valid path or buffer reference`);
+        throw new Error(
+          `Asset ${asset.id} has no valid path or buffer reference`,
+        );
       }
+
+      const runManager = this.authority.getRunManager();
+      const firstCand = candidates[0];
+      const run = runManager.startRun(
+        this.assessmentId,
+        asset.id,
+        binarySha256,
+      );
 
       const req: BinaryWorkerAnalyzeRequest = {
         protocolVersion: "1.0.0",
         kind: "ANALYZE_REQUEST",
         messageId: randomUUID(),
-        taskId: task.id,
+        taskId: normalizedTaskId,
         assessmentId: this.assessmentId,
         assetId: asset.id,
         firmwareSha256,
         binarySha256,
         runId: run.runId,
-        fencingToken: task.fencing_token,
+        fencingToken: effectiveFencingToken,
         workerId: this.supervisor.workerId,
         requestedStage: "ALL",
         binaryInput,
         analysisConfiguration: {
-          architecture,
+          architecture: mappedArch as any,
           entryPoints: ["main"],
+          targetFunctions: firstCand ? [firstCand.sinkApi] : ["strcpy"],
+          targetSinkApi: firstCand?.sinkApi ?? "strcpy",
+          candidateRuleId: firstCand?.ruleId ?? "REA-BIN-001",
+          candidateCategory: firstCand?.category ?? "unsafe_memory_operations",
           maxInstructions: 100_000,
           maxCfgBlocks: 10_000,
           maxPaths: 500,
@@ -235,38 +293,113 @@ export class BinaryAnalysisWorker {
         fencingToken: task.fencing_token,
         workerId: this.supervisor.workerId,
         requestedStage: "ALL",
-        architecture,
+        architecture: mappedArch,
         binaryInputBytes: targetBuffer,
         binaryInputPath: targetBuffer ? undefined : targetPath,
       };
 
       const workerResponse = await this.supervisor.executeTask(req);
       if (!workerResponse.ok) {
-        throw new Error(`Worker execution failed: ${workerResponse.error.message}`);
+        throw new Error(
+          `Worker execution failed: ${workerResponse.error.message}`,
+        );
       }
 
-      const valRes = this.validator.validateWorkerResponse(workerResponse.value, parentCtx);
+      // Align taskId/fencingToken in validation context with what was sent to worker
+      const validateCtx: ParentValidationContext = {
+        ...parentCtx,
+        taskId: normalizedTaskId,
+        fencingToken: effectiveFencingToken,
+      };
+
+      const valRes = this.validator.validateWorkerResponse(
+        workerResponse.value,
+        validateCtx,
+      );
       if (!valRes.ok) {
-        throw new Error(`Worker evidence validation failed: ${valRes.error.message} (${valRes.error.code})`);
+        throw new Error(
+          `Worker evidence validation failed: ${valRes.error.message} (${valRes.error.code})`,
+        );
       }
 
-      const sealedRes = this.validator.sealValidatedEvidence(valRes.value, this.authority, parentCtx);
+      const sealedRes = this.validator.sealValidatedEvidence(
+        valRes.value,
+        this.authority,
+        validateCtx,
+      );
       if (!sealedRes.ok) {
-        throw new Error(`Evidence sealing failed: ${sealedRes.error.message} (${sealedRes.error.code})`);
+        throw new Error(
+          `Evidence sealing failed: ${sealedRes.error.message} (${sealedRes.error.code})`,
+        );
       }
 
       const storage = this.blackboard as any;
       if (typeof storage.transaction === "function") {
-        for (const candidate of candidates) {
-          if (signal?.aborted) throw new Error(`Task ${task.id} aborted during candidate adjudication`);
+        for (let idx = 0; idx < candidates.length; idx++) {
+          const candidate = candidates[idx]!;
+          if (signal?.aborted)
+            throw new Error(
+              `Task ${task.id} aborted during candidate adjudication`,
+            );
+
+          let candidateBundle = sealedRes.value;
+          let candidateRunId = run.runId;
+
+          if (
+            idx > 0 &&
+            (candidate.sinkApi !== firstCand?.sinkApi ||
+              candidate.ruleId !== firstCand?.ruleId ||
+              candidate.category !== firstCand?.category)
+          ) {
+            const subRun = runManager.startRun(
+              this.assessmentId,
+              asset.id,
+              binarySha256,
+            );
+            candidateRunId = subRun.runId;
+            const subReq: BinaryWorkerAnalyzeRequest = {
+              ...req,
+              messageId: randomUUID(),
+              runId: subRun.runId,
+              analysisConfiguration: {
+                ...req.analysisConfiguration,
+                targetFunctions: [candidate.sinkApi],
+                targetSinkApi: candidate.sinkApi,
+                candidateRuleId: candidate.ruleId,
+                candidateCategory: candidate.category,
+              },
+            };
+            const subResp = await this.supervisor.executeTask(subReq);
+            if (subResp.ok) {
+              const subValCtx: ParentValidationContext = {
+                ...validateCtx,
+                runId: subRun.runId,
+              };
+              const subVal = this.validator.validateWorkerResponse(
+                subResp.value,
+                subValCtx,
+              );
+              if (subVal.ok) {
+                const subSeal = this.validator.sealValidatedEvidence(
+                  subVal.value,
+                  this.authority,
+                  subValCtx,
+                );
+                if (subSeal.ok) {
+                  candidateBundle = subSeal.value;
+                }
+              }
+            }
+          }
+
           const adjRes = this.validator.adjudicateAndPersist({
             storage,
             authority: this.authority,
             bridge: this.adjudicator,
             candidate,
             asset,
-            context: parentCtx,
-            bundle: sealedRes.value,
+            context: { ...parentCtx, runId: candidateRunId },
+            bundle: candidateBundle,
           });
           if (adjRes.ok) {
             findingsCreated.push(adjRes.value.finding);
@@ -274,7 +407,10 @@ export class BinaryAnalysisWorker {
         }
       } else {
         for (const candidate of candidates) {
-          if (signal?.aborted) throw new Error(`Task ${task.id} aborted during candidate adjudication`);
+          if (signal?.aborted)
+            throw new Error(
+              `Task ${task.id} aborted during candidate adjudication`,
+            );
           const adjResult = this.adjudicator.adjudicateCandidate(
             this.assessmentId,
             asset,
@@ -314,7 +450,9 @@ export class BinaryAnalysisWorker {
     } else {
       for (const candidate of candidates) {
         if (signal?.aborted) {
-          throw new Error(`Task ${task.id} aborted during candidate adjudication`);
+          throw new Error(
+            `Task ${task.id} aborted during candidate adjudication`,
+          );
         }
 
         const adjResult = this.adjudicator.adjudicateCandidate(

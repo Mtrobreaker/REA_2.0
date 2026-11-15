@@ -75,7 +75,9 @@ describe("BinaryAnalysisBridge ELF Metadata & Layout", () => {
   });
 
   it("fails closed on malformed or non-ELF binary buffer", async () => {
-    const invalidBuf = Buffer.from("MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00");
+    const invalidBuf = Buffer.from(
+      "MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00",
+    );
     const res1 = await bridge.analyze({ buffer: invalidBuf });
     expect(res1.ok).toBe(false);
     if (!res1.ok) {
@@ -94,7 +96,7 @@ describe("BinaryAnalysisBridge ELF Metadata & Layout", () => {
 describe("BinaryAnalysisBridge Functions & Provenance", () => {
   const bridge = new BinaryAnalysisBridge();
 
-  it("maps call relationships and security-sensitive APIs to caller functions", async () => {
+  it("does not fabricate Cartesian call relationships for unresolved imports and marks analysis incomplete", async () => {
     const elfBuf = createTestElfImage({
       is64Bit: false,
       isLE: true,
@@ -113,14 +115,30 @@ describe("BinaryAnalysisBridge Functions & Provenance", () => {
     expect(report.functions.length).toBeGreaterThanOrEqual(2);
 
     const mainFunc = report.functions.find((f) => f.name === "main");
+    const netFunc = report.functions.find((f) => f.name === "network_handler");
     expect(mainFunc).toBeDefined();
-    expect(mainFunc?.securitySensitiveCalls).toContain("strcpy");
-    expect(mainFunc?.securitySensitiveCalls).toContain("system");
+    expect(netFunc).toBeDefined();
     expect(mainFunc?.stringReferences).toContain("/bin/sh");
 
-    // Verify call relationships
-    expect(report.callRelationships.length).toBeGreaterThan(0);
-    expect(report.callRelationships.some((c) => c.caller === "main" && c.callee === "strcpy")).toBe(true);
+    // Without decoded call-site evidence, functions MUST NOT have fabricated call edges
+    expect(mainFunc?.securitySensitiveCalls).toHaveLength(0);
+    expect(netFunc?.securitySensitiveCalls).toHaveLength(0);
+    expect(report.callRelationships).toHaveLength(0);
+
+    // Unresolved sensitive imports are retained once at binary level and marked incomplete
+    expect(report.callResolutionComplete).toBe(false);
+    expect(report.metadata.unresolvedSensitiveImports).toEqual([
+      "strcpy",
+      "system",
+      "MD5_Init",
+    ]);
+    expect(report.securitySensitiveCalls).toHaveLength(3);
+    expect(
+      report.securitySensitiveCalls.every(
+        (c) =>
+          c.caller === "<symbol_table_import>" && c.callSiteResolved === false,
+      ),
+    ).toBe(true);
 
     // Verify analysis provenance
     expect(report.provenance.provider).toBe("rea_inprocess_elf_engine");
@@ -128,4 +146,3 @@ describe("BinaryAnalysisBridge Functions & Provenance", () => {
     expect(report.provenance.version).toBe("rea-6.7.0");
   });
 });
-

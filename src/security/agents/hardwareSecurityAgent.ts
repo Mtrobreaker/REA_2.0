@@ -23,7 +23,7 @@ export class DeviceInterfaceSecurityAgent implements SecurityAgent {
     context: AgentContext,
   ): Promise<Result<AgentExecutionResult, AgentExecutionError>> {
     const deviceAssets = context.state.assets.filter(
-      (a) => a.type === "device_hardware" || a.type === "hardware_rtl",
+      (a) => a.type === "device_hardware",
     );
     const actions: string[] = [];
     const findings: SecurityFinding[] = [];
@@ -41,7 +41,9 @@ export class DeviceInterfaceSecurityAgent implements SecurityAgent {
 
     for (const asset of deviceAssets) {
       if (!asset.path) continue;
-      actions.push(`Running device interface security analysis on: ${asset.name}`);
+      actions.push(
+        `Running device interface security analysis on: ${asset.name}`,
+      );
 
       const result = await defaultDeviceInterfaceAnalyzer.analyze({
         target: asset.path,
@@ -49,7 +51,9 @@ export class DeviceInterfaceSecurityAgent implements SecurityAgent {
       });
 
       if (result.ok) {
-        actions.push(`Identified ${result.value.findings.length} findings on interface ${result.value.interface_type}`);
+        actions.push(
+          `Identified ${result.value.findings.length} findings on interface ${result.value.interface_type}`,
+        );
         const mapped = result.value.findings.map((f) => ({
           ...f,
           provenance: {
@@ -59,7 +63,9 @@ export class DeviceInterfaceSecurityAgent implements SecurityAgent {
         }));
         findings.push(...mapped);
       } else {
-        actions.push(`Device interface analysis failed for ${asset.name}: ${result.error.message}`);
+        actions.push(
+          `Device interface analysis failed for ${asset.name}: ${result.error.message}`,
+        );
       }
     }
 

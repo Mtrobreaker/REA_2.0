@@ -7,7 +7,6 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import { err, ok, type Result } from "../../../domain/result.js";
 import {
-  BINARY_IPC_CONTROL_FRAME_MAX_BYTES,
   BINARY_IPC_DATA_FRAME_MAX_BYTES,
   BINARY_WORKER_PROTOCOL_VERSION,
   type BinaryWorkerAnalyzeRequest,
@@ -40,7 +39,11 @@ export type SupervisorState =
   | "TERMINATED";
 
 export type BinarySupervisorLifecycleEvent =
-  | { readonly type: "spawned"; readonly pid?: number | undefined; readonly runId: string }
+  | {
+      readonly type: "spawned";
+      readonly pid?: number | undefined;
+      readonly runId: string;
+    }
   | {
       readonly type: "ready";
       readonly workerId: string;
@@ -79,10 +82,18 @@ export type BinarySupervisorLifecycleEvent =
       readonly elapsedMs: number;
     }
   | { readonly type: "heartbeat_sent"; readonly messageId: string }
-  | { readonly type: "heartbeat_ack"; readonly workerId: string; readonly timestamp: number }
+  | {
+      readonly type: "heartbeat_ack";
+      readonly workerId: string;
+      readonly timestamp: number;
+    }
   | { readonly type: "heartbeat_missed"; readonly missedCount: number }
   | { readonly type: "worker_unresponsive"; readonly reason: string }
-  | { readonly type: "worker_killed"; readonly pid?: number | undefined; readonly signal?: string | undefined }
+  | {
+      readonly type: "worker_killed";
+      readonly pid?: number | undefined;
+      readonly signal?: string | undefined;
+    }
   | {
       readonly type: "worker_crashed";
       readonly pid?: number | undefined;
@@ -100,7 +111,10 @@ export type BinarySupervisorLifecycleEvent =
   | { readonly type: "protocol_error"; readonly message: string };
 
 export const supervisorOptionsSchema = z.strictObject({
-  workerId: z.string().regex(/^wkr_[a-zA-Z0-9_-]+$/).optional(),
+  workerId: z
+    .string()
+    .regex(/^wkr_[a-zA-Z0-9_-]+$/)
+    .optional(),
   allowedRoot: z.string().optional(),
   command: z.string().optional(),
   arguments: z.array(z.string()).optional(),
@@ -116,11 +130,15 @@ export const supervisorOptionsSchema = z.strictObject({
   maxHeartbeatMisses: z.number().int().positive().default(2),
   autoRestart: z.boolean().default(false),
   maxRestarts: z.number().int().nonnegative().default(3),
-  onEvent: z.custom<((event: BinarySupervisorLifecycleEvent) => void)>().optional(),
+  onEvent: z
+    .custom<(event: BinarySupervisorLifecycleEvent) => void>()
+    .optional(),
   windowsAuthority: z.custom<WindowsNativeAuthority>().optional(),
 });
 
-export type BinaryWorkerSupervisorConfig = z.infer<typeof supervisorOptionsSchema>;
+export type BinaryWorkerSupervisorConfig = z.infer<
+  typeof supervisorOptionsSchema
+>;
 
 export interface BinaryWorkerSupervisorOptions {
   readonly workerId?: string | undefined;
@@ -139,7 +157,9 @@ export interface BinaryWorkerSupervisorOptions {
   readonly maxHeartbeatMisses?: number | undefined;
   readonly autoRestart?: boolean | undefined;
   readonly maxRestarts?: number | undefined;
-  readonly onEvent?: ((event: BinarySupervisorLifecycleEvent) => void) | undefined;
+  readonly onEvent?:
+    | ((event: BinarySupervisorLifecycleEvent) => void)
+    | undefined;
   /** Testing authority hook for native Windows Job Object injection */
   readonly windowsAuthority?: WindowsNativeAuthority | undefined;
 }
@@ -165,7 +185,9 @@ interface ActiveTask {
   readonly deadlineTimer: NodeJS.Timeout;
   cancelGraceTimer?: NodeJS.Timeout | undefined;
   isCancelling: boolean;
-  readonly resolve: (res: Result<BinaryWorkerAnalyzeResponse, BinarySupervisorTaskError>) => void;
+  readonly resolve: (
+    res: Result<BinaryWorkerAnalyzeResponse, BinarySupervisorTaskError>,
+  ) => void;
   readonly reject: (reason: unknown) => void;
 }
 
@@ -175,11 +197,17 @@ interface ActiveTask {
 
 function resolveWorkerScriptPath(): string {
   const currentDir = fileURLToPath(new URL(".", import.meta.url));
-  const tsPath = resolve(currentDir, "../../../composition/binaryAnalysisWorkerProcess.ts");
+  const tsPath = resolve(
+    currentDir,
+    "../../../composition/binaryAnalysisWorkerProcess.ts",
+  );
   if (existsSync(tsPath)) {
     return tsPath;
   }
-  const jsPath = resolve(currentDir, "../../../composition/binaryAnalysisWorkerProcess.js");
+  const jsPath = resolve(
+    currentDir,
+    "../../../composition/binaryAnalysisWorkerProcess.js",
+  );
   if (existsSync(jsPath)) {
     return jsPath;
   }
@@ -216,7 +244,9 @@ export class BinaryWorkerSupervisor {
   private childProcess: ChildProcess | WindowsOwnedProcess | null = null;
   private childPid: number | undefined;
   private readonly framer = new BinaryMessageFramer();
-  private readonly onEvent?: ((event: BinarySupervisorLifecycleEvent) => void) | undefined;
+  private readonly onEvent?:
+    | ((event: BinarySupervisorLifecycleEvent) => void)
+    | undefined;
   private readonly windowsAuthority?: WindowsNativeAuthority | undefined;
 
   private activeTask: ActiveTask | null = null;
@@ -241,11 +271,14 @@ export class BinaryWorkerSupervisor {
     // Strict options parsing
     const parsed = supervisorOptionsSchema.safeParse(options ?? {});
     if (!parsed.success) {
-      throw new Error(`Invalid supervisor configuration: ${parsed.error.message}`);
+      throw new Error(
+        `Invalid supervisor configuration: ${parsed.error.message}`,
+      );
     }
     this.config = parsed.data;
 
-    this.workerId = this.config.workerId ?? `wkr_${randomUUID().replace(/-/g, "")}`;
+    this.workerId =
+      this.config.workerId ?? `wkr_${randomUUID().replace(/-/g, "")}`;
     this.runId = `run_sup_${randomUUID().replace(/-/g, "")}`;
     this.onEvent = options?.onEvent;
     this.windowsAuthority = options?.windowsAuthority;
@@ -292,7 +325,9 @@ export class BinaryWorkerSupervisor {
     if (this.config.arguments !== undefined) {
       spawnArgs = [...this.config.arguments];
     } else {
-      const nodeArgs: string[] = [`--max-old-space-size=${this.config.maxOldSpaceSizeMb}`];
+      const nodeArgs: string[] = [
+        `--max-old-space-size=${this.config.maxOldSpaceSizeMb}`,
+      ];
       if (scriptPath.endsWith(".ts")) {
         nodeArgs.push("--import", "tsx");
       }
@@ -310,17 +345,26 @@ export class BinaryWorkerSupervisor {
 
     // Determine whether to use native WindowsOwnedProcess
     const isWin = process.platform === "win32";
-    const nativeAuth = this.windowsAuthority ?? (isWin ? systemWindowsNativeAuthority() : null);
-    const hasNativeWin = nativeAuth !== null && ("available" in nativeAuth ? nativeAuth.available : Boolean(nativeAuth));
+    const nativeAuth =
+      this.windowsAuthority ?? (isWin ? systemWindowsNativeAuthority() : null);
+    const hasNativeWin =
+      nativeAuth !== null &&
+      ("available" in nativeAuth ? nativeAuth.available : Boolean(nativeAuth));
 
-    if (this.config.memoryLimitBytes !== undefined && (!isWin || !hasNativeWin)) {
+    if (
+      this.config.memoryLimitBytes !== undefined &&
+      (!isWin || !hasNativeWin)
+    ) {
       throw new Error(
         "Owned process memory limits require the Windows Job Object launcher with available native authority; no limit can be enforced on this host.",
       );
     }
 
     if (isWin && hasNativeWin) {
-      const authority = this.windowsAuthority ?? (nativeAuth as { available: true; authority: WindowsNativeAuthority }).authority;
+      const authority =
+        this.windowsAuthority ??
+        (nativeAuth as { available: true; authority: WindowsNativeAuthority })
+          .authority;
       const winProc = new WindowsOwnedProcess(
         command,
         spawnArgs,
@@ -329,7 +373,9 @@ export class BinaryWorkerSupervisor {
         false,
         {
           protocolStdin: true,
-          ...(this.config.memoryLimitBytes === undefined ? {} : { memoryLimitBytes: this.config.memoryLimitBytes }),
+          ...(this.config.memoryLimitBytes === undefined
+            ? {}
+            : { memoryLimitBytes: this.config.memoryLimitBytes }),
           authority,
         },
       );
@@ -359,7 +405,11 @@ export class BinaryWorkerSupervisor {
         });
         this.forceKillProcess();
         this.state = "TERMINATED";
-        reject(new Error(`Worker startup timed out after ${this.config.startupTimeoutMs}ms`));
+        reject(
+          new Error(
+            `Worker startup timed out after ${this.config.startupTimeoutMs}ms`,
+          ),
+        );
       }, this.config.startupTimeoutMs);
 
       this.readyWaiters.push({ resolve, reject, timer });
@@ -426,7 +476,8 @@ export class BinaryWorkerSupervisor {
           task.resolve(
             err({
               code:
-                res.error.code === "FRAME_OVERSIZED" || res.error.code === "CONTROL_FRAME_OVERSIZED"
+                res.error.code === "FRAME_OVERSIZED" ||
+                res.error.code === "CONTROL_FRAME_OVERSIZED"
                   ? "OVERSIZED_RESPONSE"
                   : "PROTOCOL_ERROR",
               message: errorMsg,
@@ -516,7 +567,10 @@ export class BinaryWorkerSupervisor {
     const task = this.activeTask;
 
     // Fencing token and task correlation defense (CAS validation)
-    if (response.taskId !== task.request.taskId || response.fencingToken !== task.request.fencingToken) {
+    if (
+      response.taskId !== task.request.taskId ||
+      response.fencingToken !== task.request.fencingToken
+    ) {
       this.emitEvent({
         type: "stale_response_dropped",
         taskId: response.taskId,
@@ -571,7 +625,9 @@ export class BinaryWorkerSupervisor {
     task.resolve(ok(response));
   }
 
-  private handleCancelAck(msg: Extract<BinaryWorkerIpcMessage, { kind: "CANCEL_ACK" }>): void {
+  private handleCancelAck(
+    msg: Extract<BinaryWorkerIpcMessage, { kind: "CANCEL_ACK" }>,
+  ): void {
     if (this.activeTask && this.activeTask.request.taskId === msg.taskId) {
       const task = this.activeTask;
       this.clearTaskTimers(task);
@@ -599,13 +655,18 @@ export class BinaryWorkerSupervisor {
     }
   }
 
-  private handleWorkerError(msg: Extract<BinaryWorkerIpcMessage, { kind: "WORKER_ERROR" }>): void {
+  private handleWorkerError(
+    msg: Extract<BinaryWorkerIpcMessage, { kind: "WORKER_ERROR" }>,
+  ): void {
     this.emitEvent({
       type: "protocol_error",
       message: `Worker error [${msg.code}]: ${msg.message}`,
     });
 
-    if (this.activeTask && (!msg.inReplyTo || msg.inReplyTo === this.activeTask.request.messageId)) {
+    if (
+      this.activeTask &&
+      (!msg.inReplyTo || msg.inReplyTo === this.activeTask.request.messageId)
+    ) {
       const task = this.activeTask;
       this.clearTaskTimers(task);
       this.activeTask = null;
@@ -625,7 +686,10 @@ export class BinaryWorkerSupervisor {
   }
 
   private handleProcessError(err: Error): void {
-    this.emitEvent({ type: "protocol_error", message: `Process error: ${err.message}` });
+    this.emitEvent({
+      type: "protocol_error",
+      message: `Process error: ${err.message}`,
+    });
     if (this.readyWaiters.length > 0) {
       const waiter = this.readyWaiters.shift()!;
       clearTimeout(waiter.timer);
@@ -646,7 +710,11 @@ export class BinaryWorkerSupervisor {
     if (this.readyWaiters.length > 0) {
       const waiter = this.readyWaiters.shift()!;
       clearTimeout(waiter.timer);
-      waiter.reject(new Error(`Worker exited with code ${code ?? "null"} / signal ${signal ?? "null"} before readiness`));
+      waiter.reject(
+        new Error(
+          `Worker exited with code ${code ?? "null"} / signal ${signal ?? "null"} before readiness`,
+        ),
+      );
     }
 
     // Settle pending active task
@@ -675,10 +743,16 @@ export class BinaryWorkerSupervisor {
     if (this.state !== "SHUTTING_DOWN" && this.state !== "STOPPED") {
       this.state = "TERMINATED";
 
-      if (this.config.autoRestart && this.restartCount < this.config.maxRestarts) {
+      if (
+        this.config.autoRestart &&
+        this.restartCount < this.config.maxRestarts
+      ) {
         this.restartCount++;
         this.state = "RECOVERING";
-        this.emitEvent({ type: "worker_restarted", attempt: this.restartCount });
+        this.emitEvent({
+          type: "worker_restarted",
+          attempt: this.restartCount,
+        });
         this.spawnAndHandshake().catch((cause) => {
           this.emitEvent({
             type: "protocol_error",
@@ -716,11 +790,16 @@ export class BinaryWorkerSupervisor {
     }
 
     const now = Date.now();
-    const deadlineMs = request.deadline > now ? request.deadline - now : this.config.defaultTaskTimeoutMs;
+    const deadlineMs =
+      request.deadline > now
+        ? request.deadline - now
+        : this.config.defaultTaskTimeoutMs;
 
     this.state = "BUSY";
 
-    return new Promise<Result<BinaryWorkerAnalyzeResponse, BinarySupervisorTaskError>>((resolve, reject) => {
+    return new Promise<
+      Result<BinaryWorkerAnalyzeResponse, BinarySupervisorTaskError>
+    >((resolve, reject) => {
       const deadlineTimer = setTimeout(() => {
         this.handleTaskTimeout();
       }, deadlineMs);
@@ -820,7 +899,10 @@ export class BinaryWorkerSupervisor {
     }, this.config.cancelGraceMs);
   }
 
-  private escalateForcedTimeoutTermination(task: ActiveTask, elapsedMs: number): void {
+  private escalateForcedTimeoutTermination(
+    task: ActiveTask,
+    elapsedMs: number,
+  ): void {
     if (this.activeTask !== task) return;
 
     this.emitEvent({
@@ -845,7 +927,10 @@ export class BinaryWorkerSupervisor {
   /**
    * Explicitly cancels an active task.
    */
-  public async cancelTask(taskId: string, reason = "Explicit cancellation by parent"): Promise<boolean> {
+  public async cancelTask(
+    taskId: string,
+    reason = "Explicit cancellation by parent",
+  ): Promise<boolean> {
     if (!this.activeTask || this.activeTask.request.taskId !== taskId) {
       return false;
     }
@@ -997,12 +1082,12 @@ export class BinaryWorkerSupervisor {
         resolve: () => {
           clearTimeout(timer);
           this.forceKillProcess();
-          resolve();
+          setTimeout(resolve, 30);
         },
         reject: () => {
           clearTimeout(timer);
           this.forceKillProcess();
-          resolve();
+          setTimeout(resolve, 30);
         },
       });
     });
@@ -1018,9 +1103,15 @@ export class BinaryWorkerSupervisor {
     if (!this.childProcess) return;
 
     try {
-      if ("cleanup" in this.childProcess && typeof this.childProcess.cleanup === "function") {
+      if (
+        "cleanup" in this.childProcess &&
+        typeof this.childProcess.cleanup === "function"
+      ) {
         void this.childProcess.cleanup();
-      } else if ("kill" in this.childProcess && typeof this.childProcess.kill === "function") {
+      } else if (
+        "kill" in this.childProcess &&
+        typeof this.childProcess.kill === "function"
+      ) {
         if (process.platform === "win32") {
           const pid = this.childProcess.pid;
           this.childProcess.kill(signal);
@@ -1060,9 +1151,29 @@ export class BinaryWorkerSupervisor {
     }
   }
 
-  private getStdinStream(): { write: (data: string | Buffer, encoding?: string, cb?: (err?: Error) => void) => boolean; destroyed?: boolean } | null {
+  private getStdinStream(): {
+    write: (
+      data: string | Buffer,
+      encoding?: string,
+      cb?: (err?: Error) => void,
+    ) => boolean;
+    destroyed?: boolean;
+  } | null {
     if (!this.childProcess) return null;
-    return (this.childProcess as { stdin?: { write: (data: string | Buffer, encoding?: string, cb?: (err?: Error) => void) => boolean; destroyed?: boolean } }).stdin ?? null;
+    return (
+      (
+        this.childProcess as {
+          stdin?: {
+            write: (
+              data: string | Buffer,
+              encoding?: string,
+              cb?: (err?: Error) => void,
+            ) => boolean;
+            destroyed?: boolean;
+          };
+        }
+      ).stdin ?? null
+    );
   }
 
   private emitEvent(event: BinarySupervisorLifecycleEvent): void {
@@ -1075,4 +1186,3 @@ export class BinaryWorkerSupervisor {
     }
   }
 }
-

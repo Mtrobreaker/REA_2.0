@@ -16,7 +16,8 @@ export const BINARY_IPC_CONTROL_FRAME_MAX_BYTES = 64 * 1024; // 64 KiB
 export const BINARY_IPC_DATA_FRAME_MAX_BYTES = 16 * 1024 * 1024; // 16 MiB
 
 /** Maximum buffer length kept in memory before rejecting un-delimited streams. */
-export const BINARY_IPC_MAX_PENDING_BYTES = BINARY_IPC_DATA_FRAME_MAX_BYTES + 1024;
+export const BINARY_IPC_MAX_PENDING_BYTES =
+  BINARY_IPC_DATA_FRAME_MAX_BYTES + 1024;
 
 /** Hard ceiling on file input size for local analysis tasks. */
 export const BINARY_INPUT_MAX_FILE_BYTES = 512 * 1024 * 1024; // 512 MiB
@@ -73,6 +74,16 @@ export const vulnerabilityCategoryEnum = z.enum([
   "cryptographic_weakness",
   "network_exposure",
   "hardcoded_secrets",
+  "firmware_configuration",
+]);
+
+export const stageEvaluationStatusEnum = z.enum([
+  "NOT_ATTEMPTED",
+  "UNSUPPORTED",
+  "INCONCLUSIVE",
+  "SATISFIABLE",
+  "UNSATISFIABLE",
+  "PROVEN",
 ]);
 
 // ============================================================================
@@ -93,7 +104,10 @@ export const binaryInputReferenceSchema = z.discriminatedUnion("type", [
     type: z.literal("inline_buffer"),
     expected_sha256: digestSchema,
     byte_size: positiveFiniteInt.max(BINARY_INPUT_MAX_INLINE_BYTES),
-    data_base64: z.string().min(1).max(23 * 1024 * 1024),
+    data_base64: z
+      .string()
+      .min(1)
+      .max(23 * 1024 * 1024),
     read_only: z.literal(true),
   }),
 ]);
@@ -109,7 +123,10 @@ export type BinaryInputReference = z.infer<typeof binaryInputReferenceSchema>;
 export function validateBinaryInputReference(
   ref: BinaryInputReference,
   allowedRoot?: string,
-): Result<void, { code: "PATH_TRAVERSAL_DETECTED" | "INVALID_PATH"; message: string }> {
+): Result<
+  void,
+  { code: "PATH_TRAVERSAL_DETECTED" | "INVALID_PATH"; message: string }
+> {
   if (ref.type === "inline_buffer") {
     return ok(undefined);
   }
@@ -154,7 +171,10 @@ export const rawInstructionSchema = z.strictObject({
   mnemonic: z.string().min(1).max(32),
   operands: z.string().max(256),
   size: positiveFiniteInt.max(64),
-  rawBytesHex: z.string().regex(/^[0-9a-fA-F]*$/).max(128),
+  rawBytesHex: z
+    .string()
+    .regex(/^[0-9a-fA-F]*$/)
+    .max(128),
   isBranch: z.boolean(),
   isConditional: z.boolean(),
   isCall: z.boolean(),
@@ -207,13 +227,26 @@ export const rawBasicBlockSchema = z.strictObject({
   instructionsCount: nonNegativeFiniteInt,
   predecessorIds: z.array(z.string().max(64)).max(1_000),
   successorIds: z.array(z.string().max(64)).max(1_000),
-  terminatorType: z.enum(["branch", "conditional_branch", "call", "return", "halt", "fallthrough"]),
+  terminatorType: z.enum([
+    "branch",
+    "conditional_branch",
+    "call",
+    "return",
+    "halt",
+    "fallthrough",
+  ]),
 });
 
 export const rawControlFlowEdgeSchema = z.strictObject({
   sourceBlockId: z.string().min(1).max(64),
   targetBlockId: z.string().min(1).max(64),
-  edgeType: z.enum(["conditional_true", "conditional_false", "unconditional", "fallthrough", "indirect"]),
+  edgeType: z.enum([
+    "conditional_true",
+    "conditional_false",
+    "unconditional",
+    "fallthrough",
+    "indirect",
+  ]),
 });
 
 export const rawCfgPayloadSchema = z.strictObject({
@@ -229,14 +262,16 @@ export const rawCfgPayloadSchema = z.strictObject({
 export const rawReachabilityPathSchema = z.strictObject({
   source: z.string().min(1).max(256),
   target: z.string().min(1).max(256),
-  steps: z.array(
-    z.strictObject({
-      functionName: z.string().max(256),
-      blockId: z.string().max(64),
-      address: nonNegativeFiniteInt,
-      description: z.string().max(256),
-    }),
-  ).max(500),
+  steps: z
+    .array(
+      z.strictObject({
+        functionName: z.string().max(256),
+        blockId: z.string().max(64),
+        address: nonNegativeFiniteInt,
+        description: z.string().max(256),
+      }),
+    )
+    .max(500),
   isDefinitive: z.boolean(),
   unresolvedIndirectJumps: z.array(nonNegativeFiniteInt).max(100),
 });
@@ -254,7 +289,13 @@ export const rawReachabilityPayloadSchema = z.strictObject({
 });
 
 export const rawTaintSourceSchema = z.strictObject({
-  kind: z.enum(["network_socket", "environment_variable", "command_line", "file_read", "ipc_pipe"]),
+  kind: z.enum([
+    "network_socket",
+    "environment_variable",
+    "command_line",
+    "file_read",
+    "ipc_pipe",
+  ]),
   api: z.string().min(1).max(128),
   functionName: z.string().min(1).max(256),
   address: nonNegativeFiniteInt,
@@ -271,7 +312,13 @@ export const rawTaintSinkSchema = z.strictObject({
 export const rawTaintStepSchema = z.strictObject({
   functionName: z.string().max(256),
   address: nonNegativeFiniteInt,
-  operation: z.enum(["parameter_pass", "register_copy", "arithmetic", "pointer_dereference", "call_return"]),
+  operation: z.enum([
+    "parameter_pass",
+    "register_copy",
+    "arithmetic",
+    "pointer_dereference",
+    "call_return",
+  ]),
   variableOrRegister: z.string().max(64),
   description: z.string().max(256),
 });
@@ -279,14 +326,29 @@ export const rawTaintStepSchema = z.strictObject({
 export const rawSanitizerGuardSchema = z.strictObject({
   functionName: z.string().max(256),
   address: nonNegativeFiniteInt,
-  type: z.enum(["bounds_check", "whitelist_validation", "null_check", "length_check"]),
+  type: z.enum([
+    "bounds_check",
+    "whitelist_validation",
+    "null_check",
+    "length_check",
+  ]),
   expression: z.string().max(512),
   isSound: z.boolean(),
   dominatesSink: z.boolean(),
 });
 
 export const rawTaintPayloadSchema = z.strictObject({
-  status: z.enum(["PROVEN_TAINT", "NO_TAINT", "MITIGATED_TAINT", "INCONCLUSIVE"]),
+  status: z.enum([
+    "PROVEN_TAINT",
+    "NO_TAINT",
+    "MITIGATED_TAINT",
+    "INCONCLUSIVE",
+    "NOT_ATTEMPTED",
+    "UNSUPPORTED",
+  ]),
+  stageStatus: stageEvaluationStatusEnum.optional(),
+  ruleId: z.string().min(1).max(128).optional(),
+  category: z.string().min(1).max(64).optional(),
   source: rawTaintSourceSchema.nullable(),
   sink: rawTaintSinkSchema,
   steps: z.array(rawTaintStepSchema).max(10_000),
@@ -298,7 +360,13 @@ export const rawTaintPayloadSchema = z.strictObject({
 
 export const rawWitnessConstraintSchema = z.strictObject({
   parameter: z.string().max(64),
-  type: z.enum(["length_bound", "character_set", "null_termination", "format_specifier", "numeric_range"]),
+  type: z.enum([
+    "length_bound",
+    "character_set",
+    "null_termination",
+    "format_specifier",
+    "numeric_range",
+  ]),
   expectedValue: z.string().max(512),
   description: z.string().max(512),
 });
@@ -308,9 +376,19 @@ export const rawWitnessPayloadSchema = z.strictObject({
   findingId: z.string().min(1).max(128),
   ruleId: z.string().min(1).max(128),
   category: z.string().min(1).max(64),
+  sinkApi: z.string().min(1).max(128).optional(),
+  stageStatus: stageEvaluationStatusEnum.optional(),
+  satisfiabilityStatus: stageEvaluationStatusEnum.optional(),
   isSatisfiable: z.boolean(),
   isReproducible: z.boolean(),
-  exploitabilityStatus: z.enum(["PROVEN", "THEORETICAL", "UNSATISFIABLE"]),
+  exploitabilityStatus: z.enum([
+    "PROVEN",
+    "THEORETICAL",
+    "UNSATISFIABLE",
+    "NOT_ATTEMPTED",
+    "UNSUPPORTED",
+    "INCONCLUSIVE",
+  ]),
   conflictingGuards: z.array(z.string().max(512)).max(100),
   validationLog: z.array(z.string().max(1024)).max(1_000),
   constraints: z.array(rawWitnessConstraintSchema).max(1_000),
@@ -318,17 +396,19 @@ export const rawWitnessPayloadSchema = z.strictObject({
 });
 
 export const rawAnalysisResultPayloadSchema = z.strictObject({
-  metadata: z.strictObject({
-    sha256: digestSchema,
-    architecture: z.string().max(32),
-    endianness: z.enum(["little", "big"]),
-    elfClass: z.enum(["32", "64"]),
-    entryPoint: z.string().max(32),
-    isExecutable: z.boolean(),
-    sectionsCount: nonNegativeFiniteInt,
-    programHeadersCount: nonNegativeFiniteInt,
-    dynamicLibraries: z.array(z.string().max(256)).max(1_000),
-  }).optional(),
+  metadata: z
+    .strictObject({
+      sha256: digestSchema,
+      architecture: z.string().max(32),
+      endianness: z.enum(["little", "big"]),
+      elfClass: z.enum(["32", "64"]),
+      entryPoint: z.string().max(32),
+      isExecutable: z.boolean(),
+      sectionsCount: nonNegativeFiniteInt,
+      programHeadersCount: nonNegativeFiniteInt,
+      dynamicLibraries: z.array(z.string().max(256)).max(1_000),
+    })
+    .optional(),
   candidates: z.array(rawCandidateSchema).max(10_000).optional(),
   decoder: rawDecoderPayloadSchema.optional(),
   cfg: rawCfgPayloadSchema.optional(),
@@ -338,14 +418,18 @@ export const rawAnalysisResultPayloadSchema = z.strictObject({
 });
 
 export type RawInstruction = z.infer<typeof rawInstructionSchema>;
-export type RawDecoderCompleteness = z.infer<typeof rawDecoderCompletenessSchema>;
+export type RawDecoderCompleteness = z.infer<
+  typeof rawDecoderCompletenessSchema
+>;
 export type RawCandidate = z.infer<typeof rawCandidateSchema>;
 export type RawDecoderPayload = z.infer<typeof rawDecoderPayloadSchema>;
 export type RawBasicBlock = z.infer<typeof rawBasicBlockSchema>;
 export type RawControlFlowEdge = z.infer<typeof rawControlFlowEdgeSchema>;
 export type RawCfgPayload = z.infer<typeof rawCfgPayloadSchema>;
 export type RawReachabilityPath = z.infer<typeof rawReachabilityPathSchema>;
-export type RawReachabilityPayload = z.infer<typeof rawReachabilityPayloadSchema>;
+export type RawReachabilityPayload = z.infer<
+  typeof rawReachabilityPayloadSchema
+>;
 export type RawTaintSource = z.infer<typeof rawTaintSourceSchema>;
 export type RawTaintSink = z.infer<typeof rawTaintSinkSchema>;
 export type RawTaintStep = z.infer<typeof rawTaintStepSchema>;
@@ -353,7 +437,9 @@ export type RawSanitizerGuard = z.infer<typeof rawSanitizerGuardSchema>;
 export type RawTaintPayload = z.infer<typeof rawTaintPayloadSchema>;
 export type RawWitnessConstraint = z.infer<typeof rawWitnessConstraintSchema>;
 export type RawWitnessPayload = z.infer<typeof rawWitnessPayloadSchema>;
-export type RawAnalysisResultPayload = z.infer<typeof rawAnalysisResultPayloadSchema>;
+export type RawAnalysisResultPayload = z.infer<
+  typeof rawAnalysisResultPayloadSchema
+>;
 
 // ============================================================================
 // 1. BinaryWorkerRequest Schema (Parent -> Worker)
@@ -377,6 +463,9 @@ export const binaryWorkerAnalyzeRequestSchema = z.strictObject({
     architecture: supportedArchEnum,
     entryPoints: z.array(z.string().min(1).max(256)).max(100).default(["main"]),
     targetFunctions: z.array(z.string().min(1).max(256)).max(1_000).optional(),
+    targetSinkApi: z.string().min(1).max(128).optional(),
+    candidateRuleId: z.string().min(1).max(128).optional(),
+    candidateCategory: z.string().min(1).max(64).optional(),
     maxInstructions: positiveFiniteInt.max(500_000).default(100_000),
     maxCfgBlocks: positiveFiniteInt.max(50_000).default(10_000),
     maxPaths: positiveFiniteInt.max(2_000).default(500),
@@ -384,7 +473,9 @@ export const binaryWorkerAnalyzeRequestSchema = z.strictObject({
   deadline: positiveFiniteInt,
 });
 
-export type BinaryWorkerAnalyzeRequest = z.infer<typeof binaryWorkerAnalyzeRequestSchema>;
+export type BinaryWorkerAnalyzeRequest = z.infer<
+  typeof binaryWorkerAnalyzeRequestSchema
+>;
 
 // ============================================================================
 // 2. BinaryWorkerResponse Schema (Worker -> Parent, Untrusted)
@@ -416,7 +507,9 @@ export const binaryWorkerAnalyzeResponseSchema = z.strictObject({
   }),
 });
 
-export type BinaryWorkerAnalyzeResponse = z.infer<typeof binaryWorkerAnalyzeResponseSchema>;
+export type BinaryWorkerAnalyzeResponse = z.infer<
+  typeof binaryWorkerAnalyzeResponseSchema
+>;
 
 // ============================================================================
 // 3. Lifecycle & Control Messages
@@ -494,11 +587,21 @@ export const binaryWorkerErrorResponseSchema = z.strictObject({
 
 export type BinaryWorkerReady = z.infer<typeof binaryWorkerReadySchema>;
 export type BinaryWorkerHeartbeat = z.infer<typeof binaryWorkerHeartbeatSchema>;
-export type BinaryWorkerCancelRequest = z.infer<typeof binaryWorkerCancelRequestSchema>;
-export type BinaryWorkerCancelAckResponse = z.infer<typeof binaryWorkerCancelAckResponseSchema>;
-export type BinaryWorkerShutdownRequest = z.infer<typeof binaryWorkerShutdownRequestSchema>;
-export type BinaryWorkerShutdownAckResponse = z.infer<typeof binaryWorkerShutdownAckResponseSchema>;
-export type BinaryWorkerErrorResponse = z.infer<typeof binaryWorkerErrorResponseSchema>;
+export type BinaryWorkerCancelRequest = z.infer<
+  typeof binaryWorkerCancelRequestSchema
+>;
+export type BinaryWorkerCancelAckResponse = z.infer<
+  typeof binaryWorkerCancelAckResponseSchema
+>;
+export type BinaryWorkerShutdownRequest = z.infer<
+  typeof binaryWorkerShutdownRequestSchema
+>;
+export type BinaryWorkerShutdownAckResponse = z.infer<
+  typeof binaryWorkerShutdownAckResponseSchema
+>;
+export type BinaryWorkerErrorResponse = z.infer<
+  typeof binaryWorkerErrorResponseSchema
+>;
 
 // ============================================================================
 // Discriminated Union of All Messages
@@ -516,7 +619,9 @@ export const binaryWorkerIpcMessageSchema = z.discriminatedUnion("kind", [
   binaryWorkerErrorResponseSchema,
 ]);
 
-export type BinaryWorkerIpcMessage = z.infer<typeof binaryWorkerIpcMessageSchema>;
+export type BinaryWorkerIpcMessage = z.infer<
+  typeof binaryWorkerIpcMessageSchema
+>;
 
 export const binaryWorkerParentMessageSchema = z.discriminatedUnion("kind", [
   binaryWorkerAnalyzeRequestSchema,
@@ -524,7 +629,9 @@ export const binaryWorkerParentMessageSchema = z.discriminatedUnion("kind", [
   binaryWorkerShutdownRequestSchema,
 ]);
 
-export type BinaryWorkerParentMessage = z.infer<typeof binaryWorkerParentMessageSchema>;
+export type BinaryWorkerParentMessage = z.infer<
+  typeof binaryWorkerParentMessageSchema
+>;
 
 export const binaryWorkerChildMessageSchema = z.discriminatedUnion("kind", [
   binaryWorkerReadySchema,
@@ -535,7 +642,9 @@ export const binaryWorkerChildMessageSchema = z.discriminatedUnion("kind", [
   binaryWorkerErrorResponseSchema,
 ]);
 
-export type BinaryWorkerChildMessage = z.infer<typeof binaryWorkerChildMessageSchema>;
+export type BinaryWorkerChildMessage = z.infer<
+  typeof binaryWorkerChildMessageSchema
+>;
 
 // ============================================================================
 // Parent-Side Context Validation Helper
@@ -615,4 +724,3 @@ export function validateResponseContext(
   }
   return ok(undefined);
 }
-

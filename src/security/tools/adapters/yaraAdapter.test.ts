@@ -74,7 +74,7 @@ apt_backdoor_beacon [malware,c2] [author="Analyst",description="Known C2 Beacon 
         expect(finding.severity.level).toBe("CRITICAL");
         expect(finding.location.file).toBe("/bin/target_binary.elf");
         expect(finding.location.offset).toBe(0x1420);
-        expect(finding.verification_status).toBe("VERIFIED");
+        expect(finding.verification_status).toBe("CANDIDATE");
         expect(finding.confidence.level).toBe("CONFIRMED");
       }
     }
@@ -111,4 +111,3 @@ apt_backdoor_beacon [malware,c2] [author="Analyst",description="Known C2 Beacon 
     }
   });
 });
-

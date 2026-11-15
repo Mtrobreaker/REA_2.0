@@ -166,7 +166,8 @@ export class SandboxedExtractor {
         }
         payloadBuffer = decompressedRes.value;
         const innerDetection = detectFirmwareFormat(payloadBuffer);
-        formatToExtract = innerDetection.format === "unknown" ? "tar" : innerDetection.format;
+        formatToExtract =
+          innerDetection.format === "unknown" ? "tar" : innerDetection.format;
       }
 
       // Extract based on format
@@ -236,7 +237,10 @@ export class SandboxedExtractor {
 
     while (offset + 512 <= buffer.length) {
       if (signal?.aborted) {
-        return err({ code: "EXTRACTION_TIMEOUT", message: "Extraction cancelled by signal" });
+        return err({
+          code: "EXTRACTION_TIMEOUT",
+          message: "Extraction cancelled by signal",
+        });
       }
 
       const header = buffer.subarray(offset, offset + 512);
@@ -272,19 +276,26 @@ export class SandboxedExtractor {
 
       // Handle GNU long filename / linkname
       if (typeflag === "L") {
-        nextLongName = buffer.subarray(offset, offset + size).toString("utf8").replace(/\0+$/u, "");
+        nextLongName = buffer
+          .subarray(offset, offset + size)
+          .toString("utf8")
+          .replace(/\0+$/u, "");
         const blocks = Math.ceil(size / 512);
         offset += blocks * 512;
         continue;
       }
       if (typeflag === "K") {
-        nextLongLink = buffer.subarray(offset, offset + size).toString("utf8").replace(/\0+$/u, "");
+        nextLongLink = buffer
+          .subarray(offset, offset + size)
+          .toString("utf8")
+          .replace(/\0+$/u, "");
         const blocks = Math.ceil(size / 512);
         offset += blocks * 512;
         continue;
       }
 
-      const entryPath = nextLongName ?? (prefix ? `${prefix}/${rawName}` : rawName);
+      const entryPath =
+        nextLongName ?? (prefix ? `${prefix}/${rawName}` : rawName);
       const linkTarget = nextLongLink ?? (rawLinkname || undefined);
       nextLongName = undefined;
       nextLongLink = undefined;
@@ -309,24 +320,37 @@ export class SandboxedExtractor {
       };
 
       // 1. PRE-WRITE VALIDATION
-      const valResult = PreWriteValidator.validateEntry(candidate, sandboxDir, this.policy, stats);
+      const valResult = PreWriteValidator.validateEntry(
+        candidate,
+        sandboxDir,
+        this.policy,
+        stats,
+      );
       if (!valResult.ok) {
         if (valResult.error.code === "DEVICE_NODE_REJECTED") {
           // Special files (device nodes, FIFOs, sockets) cannot and must not be created on host disk.
           // Safely skip disk creation while preserving sandbox security bounds.
           continue;
         }
-        if (valResult.error.code === "SYMLINK_ESCAPE" && candidate.kind === "symlink") {
+        if (
+          valResult.error.code === "SYMLINK_ESCAPE" &&
+          candidate.kind === "symlink"
+        ) {
           // Neutralize absolute/forbidden host symlinks inside firmware (e.g. /proc/mounts, /etc/ssl/certs).
           // Creating raw host symlinks to these paths would be dangerous on host OS.
           // Safely write a non-executable metadata placeholder file to preserve the link record.
           const canonical = resolve(sandboxDir);
-          const sanitized = normalize(candidate.path.replace(/\\/g, "/")).replace(/^\/+/u, "");
+          const sanitized = normalize(
+            candidate.path.replace(/\\/g, "/"),
+          ).replace(/^\/+/u, "");
           const destPath = resolve(canonical, sanitized);
           if (destPath === canonical || !destPath.startsWith(canonical + sep)) {
             return valResult; // Path itself escapes sandbox
           }
-          const dirRes = await PreWriteValidator.ensureSafeDirectory(dirname(destPath), sandboxDir);
+          const dirRes = await PreWriteValidator.ensureSafeDirectory(
+            dirname(destPath),
+            sandboxDir,
+          );
           if (!dirRes.ok) return dirRes;
 
           const phRes = await this.writeEntryExclusive(
@@ -351,19 +375,31 @@ export class SandboxedExtractor {
 
       // 2. WRITE ENTRY
       if (validated.kind === "directory") {
-        const dirRes = await PreWriteValidator.ensureSafeDirectory(validated.destinationPath, sandboxDir);
+        const dirRes = await PreWriteValidator.ensureSafeDirectory(
+          validated.destinationPath,
+          sandboxDir,
+        );
         if (!dirRes.ok) return dirRes;
         validatedEntries.push(validated);
       } else if (validated.kind === "symlink") {
-        const dirRes = await PreWriteValidator.ensureSafeDirectory(dirname(validated.destinationPath), sandboxDir);
+        const dirRes = await PreWriteValidator.ensureSafeDirectory(
+          dirname(validated.destinationPath),
+          sandboxDir,
+        );
         if (!dirRes.ok) return dirRes;
 
-        const symCheck = await PreWriteValidator.validateNotSymlink(validated.destinationPath);
+        const symCheck = await PreWriteValidator.validateNotSymlink(
+          validated.destinationPath,
+        );
         if (!symCheck.ok) return symCheck;
 
         try {
-          if (validated.linkTarget) {
+          if (validated.linkTarget && process.platform !== "win32") {
             await symlink(validated.linkTarget, validated.destinationPath);
+          } else {
+            throw new Error(
+              "Use deterministic .symlink metadata placeholder on win32",
+            );
           }
         } catch {
           // On non-admin Windows, symlink may throw EPERM; fallback to link metadata file
@@ -376,21 +412,32 @@ export class SandboxedExtractor {
         (stats as { currentFileCount: number }).currentFileCount++;
         validatedEntries.push(validated);
       } else if (validated.kind === "hardlink") {
-        const dirRes = await PreWriteValidator.ensureSafeDirectory(dirname(validated.destinationPath), sandboxDir);
+        const dirRes = await PreWriteValidator.ensureSafeDirectory(
+          dirname(validated.destinationPath),
+          sandboxDir,
+        );
         if (!dirRes.ok) return dirRes;
 
-        const symCheck = await PreWriteValidator.validateNotSymlink(validated.destinationPath);
+        const symCheck = await PreWriteValidator.validateNotSymlink(
+          validated.destinationPath,
+        );
         if (!symCheck.ok) return symCheck;
 
         if (validated.linkTarget) {
-          const resolvedTarget = resolve(sandboxDir, validated.linkTarget.replace(/^[/\\]+/u, ""));
+          const resolvedTarget = resolve(
+            sandboxDir,
+            validated.linkTarget.replace(/^[/\\]+/u, ""),
+          );
           try {
             await link(resolvedTarget, validated.destinationPath);
           } catch {
             // Fallback to copying bytes if hardlink is not permitted
             try {
               const targetBytes = await readFile(resolvedTarget);
-              const copyRes = await this.writeEntryExclusive(validated.destinationPath, targetBytes);
+              const copyRes = await this.writeEntryExclusive(
+                validated.destinationPath,
+                targetBytes,
+              );
               if (!copyRes.ok) return copyRes;
             } catch {
               const linkPhRes = await this.writeEntryExclusive(
@@ -404,15 +451,22 @@ export class SandboxedExtractor {
         (stats as { currentFileCount: number }).currentFileCount++;
         validatedEntries.push(validated);
       } else if (validated.kind === "file") {
-        const dirRes = await PreWriteValidator.ensureSafeDirectory(dirname(validated.destinationPath), sandboxDir);
+        const dirRes = await PreWriteValidator.ensureSafeDirectory(
+          dirname(validated.destinationPath),
+          sandboxDir,
+        );
         if (!dirRes.ok) return dirRes;
 
         const fileContent = buffer.subarray(offset, offset + size);
-        const writeRes = await this.writeEntryExclusive(validated.destinationPath, fileContent);
+        const writeRes = await this.writeEntryExclusive(
+          validated.destinationPath,
+          fileContent,
+        );
         if (!writeRes.ok) return writeRes;
 
         (stats as { currentFileCount: number }).currentFileCount++;
-        (stats as { currentCumulativeBytes: number }).currentCumulativeBytes += size;
+        (stats as { currentCumulativeBytes: number }).currentCumulativeBytes +=
+          size;
         validatedEntries.push(validated);
       }
 
@@ -441,7 +495,10 @@ export class SandboxedExtractor {
 
     for (const entry of entriesResult.value) {
       if (signal?.aborted) {
-        return err({ code: "EXTRACTION_TIMEOUT", message: "Extraction cancelled by signal" });
+        return err({
+          code: "EXTRACTION_TIMEOUT",
+          message: "Extraction cancelled by signal",
+        });
       }
 
       const candidate: ArchiveEntryCandidate = {
@@ -452,24 +509,37 @@ export class SandboxedExtractor {
       };
 
       // 1. PRE-WRITE VALIDATION
-      const valResult = PreWriteValidator.validateEntry(candidate, sandboxDir, this.policy, stats);
+      const valResult = PreWriteValidator.validateEntry(
+        candidate,
+        sandboxDir,
+        this.policy,
+        stats,
+      );
       if (!valResult.ok) {
         if (valResult.error.code === "DEVICE_NODE_REJECTED") {
           // Special files (device nodes, FIFOs, sockets) cannot and must not be created on host disk.
           // Safely skip disk creation while preserving sandbox security bounds.
           continue;
         }
-        if (valResult.error.code === "SYMLINK_ESCAPE" && candidate.kind === "symlink") {
+        if (
+          valResult.error.code === "SYMLINK_ESCAPE" &&
+          candidate.kind === "symlink"
+        ) {
           // Neutralize absolute/forbidden host symlinks inside firmware (e.g. /proc/mounts, /etc/ssl/certs).
           // Creating raw host symlinks to these paths would be dangerous on host OS.
           // Safely write a non-executable metadata placeholder file to preserve the link record.
           const canonical = resolve(sandboxDir);
-          const sanitized = normalize(candidate.path.replace(/\\/g, "/")).replace(/^\/+/u, "");
+          const sanitized = normalize(
+            candidate.path.replace(/\\/g, "/"),
+          ).replace(/^\/+/u, "");
           const destPath = resolve(canonical, sanitized);
           if (destPath === canonical || !destPath.startsWith(canonical + sep)) {
             return valResult; // Path itself escapes sandbox
           }
-          const dirRes = await PreWriteValidator.ensureSafeDirectory(dirname(destPath), sandboxDir);
+          const dirRes = await PreWriteValidator.ensureSafeDirectory(
+            dirname(destPath),
+            sandboxDir,
+          );
           if (!dirRes.ok) return dirRes;
 
           const phRes = await this.writeEntryExclusive(
@@ -494,19 +564,31 @@ export class SandboxedExtractor {
 
       // 2. WRITE ENTRY
       if (validated.kind === "directory") {
-        const dirRes = await PreWriteValidator.ensureSafeDirectory(validated.destinationPath, sandboxDir);
+        const dirRes = await PreWriteValidator.ensureSafeDirectory(
+          validated.destinationPath,
+          sandboxDir,
+        );
         if (!dirRes.ok) return dirRes;
         validatedEntries.push(validated);
       } else if (validated.kind === "symlink") {
-        const dirRes = await PreWriteValidator.ensureSafeDirectory(dirname(validated.destinationPath), sandboxDir);
+        const dirRes = await PreWriteValidator.ensureSafeDirectory(
+          dirname(validated.destinationPath),
+          sandboxDir,
+        );
         if (!dirRes.ok) return dirRes;
 
-        const symCheck = await PreWriteValidator.validateNotSymlink(validated.destinationPath);
+        const symCheck = await PreWriteValidator.validateNotSymlink(
+          validated.destinationPath,
+        );
         if (!symCheck.ok) return symCheck;
 
         try {
-          if (validated.linkTarget) {
+          if (validated.linkTarget && process.platform !== "win32") {
             await symlink(validated.linkTarget, validated.destinationPath);
+          } else {
+            throw new Error(
+              "Use deterministic .symlink metadata placeholder on win32",
+            );
           }
         } catch {
           const phRes = await this.writeEntryExclusive(
@@ -518,7 +600,10 @@ export class SandboxedExtractor {
         (stats as { currentFileCount: number }).currentFileCount++;
         validatedEntries.push(validated);
       } else if (validated.kind === "file") {
-        const dirRes = await PreWriteValidator.ensureSafeDirectory(dirname(validated.destinationPath), sandboxDir);
+        const dirRes = await PreWriteValidator.ensureSafeDirectory(
+          dirname(validated.destinationPath),
+          sandboxDir,
+        );
         if (!dirRes.ok) return dirRes;
 
         const writeRes = await this.writeEntryExclusive(
@@ -528,7 +613,8 @@ export class SandboxedExtractor {
         if (!writeRes.ok) return writeRes;
 
         (stats as { currentFileCount: number }).currentFileCount++;
-        (stats as { currentCumulativeBytes: number }).currentCumulativeBytes += entry.size;
+        (stats as { currentCumulativeBytes: number }).currentCumulativeBytes +=
+          entry.size;
         validatedEntries.push(validated);
       }
     }
@@ -547,7 +633,8 @@ export class SandboxedExtractor {
     content: Buffer,
   ): Promise<Result<void, ExtractionError>> {
     // 1. Initial check for existing symlinks or Windows .symlink placeholders
-    const symCheck = await PreWriteValidator.validateNotSymlink(destinationPath);
+    const symCheck =
+      await PreWriteValidator.validateNotSymlink(destinationPath);
     if (!symCheck.ok) {
       return symCheck;
     }
@@ -567,7 +654,9 @@ export class SandboxedExtractor {
             violationPath: destinationPath,
           });
         }
-        const placeholder = await lstat(`${destinationPath}.symlink`).catch(() => null);
+        const placeholder = await lstat(`${destinationPath}.symlink`).catch(
+          () => null,
+        );
         if (placeholder) {
           return err({
             code: "SYMLINK_ESCAPE",
@@ -624,7 +713,10 @@ export class SandboxedExtractor {
     signal?: AbortSignal,
   ): Promise<Result<Buffer, ExtractionError>> {
     if (signal?.aborted) {
-      return err({ code: "EXTRACTION_TIMEOUT", message: "Decompression cancelled by signal" });
+      return err({
+        code: "EXTRACTION_TIMEOUT",
+        message: "Decompression cancelled by signal",
+      });
     }
 
     return new Promise<Result<Buffer, ExtractionError>>((resolve) => {
@@ -657,7 +749,12 @@ export class SandboxedExtractor {
       };
 
       const onAbort = () => {
-        settle(err({ code: "EXTRACTION_TIMEOUT", message: "Decompression cancelled by signal" }));
+        settle(
+          err({
+            code: "EXTRACTION_TIMEOUT",
+            message: "Decompression cancelled by signal",
+          }),
+        );
       };
 
       if (signal) {
@@ -671,10 +768,12 @@ export class SandboxedExtractor {
 
         // 1. Enforce cumulative byte limit incrementally on every chunk
         if (bytesDecompressed > maxCumulative) {
-          settle(err({
-            code: "QUOTA_EXCEEDED",
-            message: `Decompressed size (${bytesDecompressed} bytes) exceeds maximum allowed cumulative limit (${maxCumulative} bytes)`,
-          }));
+          settle(
+            err({
+              code: "QUOTA_EXCEEDED",
+              message: `Decompressed size (${bytesDecompressed} bytes) exceeds maximum allowed cumulative limit (${maxCumulative} bytes)`,
+            }),
+          );
           return;
         }
 
@@ -682,10 +781,12 @@ export class SandboxedExtractor {
         if (inputLength > 0 && bytesDecompressed > 1024 * 1024) {
           const ratio = bytesDecompressed / inputLength;
           if (ratio > maxRatio) {
-            settle(err({
-              code: "DECOMPRESSION_BOMB",
-              message: `Streaming decompression bomb detected: expansion ratio ${ratio.toFixed(1)}x exceeds maximum allowed ${maxRatio}x`,
-            }));
+            settle(
+              err({
+                code: "DECOMPRESSION_BOMB",
+                message: `Streaming decompression bomb detected: expansion ratio ${ratio.toFixed(1)}x exceeds maximum allowed ${maxRatio}x`,
+              }),
+            );
             return;
           }
         }
@@ -701,19 +802,23 @@ export class SandboxedExtractor {
       });
 
       gunzip.on("error", (error: Error) => {
-        settle(err({
-          code: "INVALID_FIRMWARE",
-          message: `Failed to decompress gzip stream: ${error.message}`,
-          cause: error,
-        }));
+        settle(
+          err({
+            code: "INVALID_FIRMWARE",
+            message: `Failed to decompress gzip stream: ${error.message}`,
+            cause: error,
+          }),
+        );
       });
 
       readable.on("error", (error: Error) => {
-        settle(err({
-          code: "INVALID_FIRMWARE",
-          message: `Gzip stream read error: ${error.message}`,
-          cause: error,
-        }));
+        settle(
+          err({
+            code: "INVALID_FIRMWARE",
+            message: `Gzip stream read error: ${error.message}`,
+            cause: error,
+          }),
+        );
       });
 
       readable.pipe(gunzip);

@@ -61,15 +61,25 @@ describe("registerSecurityTools (MCP Server Integration)", () => {
     const parsed = JSON.parse(response.content[0].text);
     expect(parsed.target).toBe(ttyPath);
     expect(parsed.findings.length).toBeGreaterThanOrEqual(1);
-    expect(parsed.findings[0].name).toContain("Unauthenticated Root Shell on UART Serial Console");
+    expect(parsed.findings[0].name).toContain(
+      "Unauthenticated Root Shell on UART Serial Console",
+    );
   });
 
   it("executes security_os_audit tool handler on extracted filesystem", async () => {
     const rootPath = join(tempDir, "rootfs");
     const etcPath = join(rootPath, "etc");
     await mkdir(etcPath, { recursive: true });
-    await writeFile(join(etcPath, "passwd"), "root:x:0:0:root:/root:/bin/sh\n", "utf8");
-    await writeFile(join(etcPath, "shadow"), "root::19000:0:99999:7:::\n", "utf8");
+    await writeFile(
+      join(etcPath, "passwd"),
+      "root:x:0:0:root:/root:/bin/sh\n",
+      "utf8",
+    );
+    await writeFile(
+      join(etcPath, "shadow"),
+      "root::19000:0:99999:7:::\n",
+      "utf8",
+    );
 
     const tool = tools.get("security_os_audit")!;
     const response = await tool.callback({
@@ -110,21 +120,6 @@ describe("registerSecurityTools (MCP Server Integration)", () => {
     expect(parsed.target_path).toBe(fwPath);
     expect(parsed.findings.length).toBeGreaterThanOrEqual(1);
     expect(parsed.risk_score).toBeGreaterThan(0);
-  });
-
-  it("executes security_hardware_rtl_inspect tool handler (backward compatibility)", async () => {
-    const ttyPath = join(tempDir, "serial_hw.tty");
-    await writeFile(ttyPath, "BusyBox v1.33.1 (ash)\n# ", "utf8");
-
-    const tool = tools.get("security_hardware_rtl_inspect")!;
-    const response = await tool.callback({
-      path: ttyPath,
-    });
-
-    expect(response.content).toHaveLength(1);
-    const parsed = JSON.parse(response.content[0].text);
-    expect(parsed.target).toBe(ttyPath);
-    expect(parsed.findings.length).toBeGreaterThanOrEqual(1);
   });
 
   it("executes security_multiagent_assess tool handler across targets", async () => {
@@ -172,4 +167,3 @@ describe("registerSecurityTools (MCP Server Integration)", () => {
     expect(response.content[0].text).toContain("Security Assessment Report");
   });
 });
-

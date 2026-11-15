@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ok, type Result } from "../../domain/result.js";
 import {
@@ -7,7 +7,10 @@ import {
   type SecurityFinding,
 } from "../../domain/security/finding.js";
 import type { AssetId, AssetRecord } from "../../domain/security/asset.js";
-import type { CweId, SecuritySeverityLevel } from "../../domain/security/classification.js";
+import type {
+  CweId,
+  SecuritySeverityLevel,
+} from "../../domain/security/classification.js";
 
 export interface EmbeddedOsAnalysisResult {
   readonly root_path: string;
@@ -95,7 +98,7 @@ export class EmbeddedOsAnalyzer {
         impact: {
           description: "Elevated privileges or unauthorized device access.",
           attack_prerequisites: ["Local or network access to device"],
-          exploitability: "PROVEN",
+          exploitability: "THEORETICAL",
         },
         severity: {
           level: opts.severity,
@@ -122,7 +125,7 @@ export class EmbeddedOsAnalyzer {
           mitre_attack: [],
           owasp: [],
         },
-        verification_status: "UNVERIFIED",
+        verification_status: "CANDIDATE",
         provenance: {
           discovered_by: "embedded-os-analyzer",
           discovered_at: new Date().toISOString(),
@@ -163,7 +166,8 @@ export class EmbeddedOsAnalyzer {
                   filePath: passwdPath,
                   line: i + 1,
                   technicalDescription: `User '${username}' has UID 0 granting unrestricted superuser privileges.`,
-                  rootCause: "Hardcoded secondary superuser account in /etc/passwd.",
+                  rootCause:
+                    "Hardcoded secondary superuser account in /etc/passwd.",
                   remediationDesc: `Remove user '${username}' or assign a non-zero UID.`,
                 }),
               );
@@ -172,7 +176,9 @@ export class EmbeddedOsAnalyzer {
         }
       }
 
-      const passwordSourcePath = existsSync(shadowPath) ? shadowPath : passwdPath;
+      const passwordSourcePath = existsSync(shadowPath)
+        ? shadowPath
+        : passwdPath;
       if (existsSync(passwordSourcePath)) {
         const content = readFileSync(passwordSourcePath, "utf-8");
         const lines = content.split("\n");
@@ -270,9 +276,11 @@ export class EmbeddedOsAnalyzer {
                 cweId: "CWE-693" as CweId,
                 filePath: targetP,
                 line: 1,
-                technicalDescription: "Kernel built without KASLR facilitates return-oriented programming (ROP) exploits.",
+                technicalDescription:
+                  "Kernel built without KASLR facilitates return-oriented programming (ROP) exploits.",
                 rootCause: "CONFIG_RANDOMIZE_BASE is not enabled.",
-                remediationDesc: "Enable CONFIG_RANDOMIZE_BASE=y in kernel compilation configuration.",
+                remediationDesc:
+                  "Enable CONFIG_RANDOMIZE_BASE=y in kernel compilation configuration.",
               }),
             );
           }
@@ -287,9 +295,11 @@ export class EmbeddedOsAnalyzer {
                 cweId: "CWE-119" as CweId,
                 filePath: targetP,
                 line: 1,
-                technicalDescription: "Kernel functions lack stack protector strong bounds checking.",
+                technicalDescription:
+                  "Kernel functions lack stack protector strong bounds checking.",
                 rootCause: "CONFIG_STACKPROTECTOR_STRONG is not set.",
-                remediationDesc: "Enable CONFIG_STACKPROTECTOR_STRONG=y in kernel compilation configuration.",
+                remediationDesc:
+                  "Enable CONFIG_STACKPROTECTOR_STRONG=y in kernel compilation configuration.",
               }),
             );
           }

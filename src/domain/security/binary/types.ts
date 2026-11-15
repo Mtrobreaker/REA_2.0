@@ -65,6 +65,7 @@ export interface SecuritySensitiveApiCall {
   readonly api: string;
   readonly address?: string | undefined;
   readonly category: VulnerabilityCategory;
+  readonly callSiteResolved?: boolean | undefined;
 }
 
 export interface BinaryAnalysisMetadata {
@@ -80,6 +81,7 @@ export interface BinaryAnalysisMetadata {
   readonly exportedSymbols: readonly BinarySymbol[];
   readonly strings: readonly DiscoveredString[];
   readonly isExecutable: boolean;
+  readonly unresolvedSensitiveImports?: readonly string[] | undefined;
 }
 
 export interface BinaryAnalysisReport {
@@ -88,6 +90,7 @@ export interface BinaryAnalysisReport {
   readonly callRelationships: readonly CallRelationship[];
   readonly securitySensitiveCalls: readonly SecuritySensitiveApiCall[];
   readonly decompiledFunctions: Readonly<Record<string, string>>;
+  readonly callResolutionComplete?: boolean | undefined;
   readonly provenance: {
     readonly provider: string;
     readonly version: string;

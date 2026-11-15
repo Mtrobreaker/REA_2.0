@@ -26,7 +26,6 @@ export const ASSET_TYPES = [
   "compiled_binary",
   "firmware_image",
   "device_hardware",
-  "hardware_rtl",
   "network_service",
   "operating_system",
   "web_application",
@@ -137,4 +136,3 @@ export class AssetMap {
     return this.values();
   }
 }
-

@@ -5,7 +5,10 @@ import {
   type SecurityFinding,
 } from "../../domain/security/finding.js";
 import type { AssetId, AssetRecord } from "../../domain/security/asset.js";
-import type { CweId, SecuritySeverityLevel } from "../../domain/security/classification.js";
+import type {
+  CweId,
+  SecuritySeverityLevel,
+} from "../../domain/security/classification.js";
 import {
   defaultSerialUartAdapter,
   SerialUartAdapter,
@@ -33,7 +36,11 @@ export class DeviceInterfaceAnalyzer {
     },
   ): Promise<Result<DeviceInterfaceAnalysisResult, Error>> {
     const target = options.target;
-    const ifaceType = options.interface_type ?? (target.startsWith("COM") || target.includes("tty") ? "UART_SERIAL" : "ADB");
+    const ifaceType =
+      options.interface_type ??
+      (target.startsWith("COM") || target.includes("tty")
+        ? "UART_SERIAL"
+        : "ADB");
     const findings: SecurityFinding[] = [];
     const rawDetails: Record<string, unknown> = {};
 
@@ -91,11 +98,15 @@ export class DeviceInterfaceAnalyzer {
         technical_description: opts.technicalDescription,
         root_cause: opts.rootCause,
         evidence_ids: [],
-        reproduction_steps: [`Connect to ${ifaceType} interface at ${target} and inspect access level`],
+        reproduction_steps: [
+          `Connect to ${ifaceType} interface at ${target} and inspect access level`,
+        ],
         impact: {
           description: "Direct local or physical root-level device compromise.",
-          attack_prerequisites: ["Physical or interface access to device pins/ports"],
-          exploitability: "PROVEN",
+          attack_prerequisites: [
+            "Physical or interface access to device pins/ports",
+          ],
+          exploitability: "THEORETICAL",
         },
         severity: {
           level: opts.severity,
@@ -122,7 +133,7 @@ export class DeviceInterfaceAnalyzer {
           mitre_attack: [],
           owasp: [],
         },
-        verification_status: "UNVERIFIED",
+        verification_status: "CANDIDATE",
         provenance: {
           discovered_by: "device-interface-analyzer",
           discovered_at: new Date().toISOString(),
@@ -148,7 +159,8 @@ export class DeviceInterfaceAnalyzer {
               cweId: "CWE-1188" as CweId,
               technicalDescription:
                 "The hardware serial UART console provides an interactive root shell without requiring password authentication or login verification.",
-              rootCause: "Insecure default inittab/getty configuration on tty serial device.",
+              rootCause:
+                "Insecure default inittab/getty configuration on tty serial device.",
               remediationDesc:
                 "Disable serial console autologin; enforce password authentication with /sbin/getty or /sbin/login.",
             }),
@@ -171,8 +183,10 @@ export class DeviceInterfaceAnalyzer {
               cweId: "CWE-250" as CweId,
               technicalDescription:
                 "ADB daemon executes as root or ro.debuggable=1 allows direct adb root access without security controls.",
-              rootCause: "Production build contains userdebug/eng debug build configuration.",
-              remediationDesc: "Produce a user build with ro.debuggable=0 and ro.secure=1.",
+              rootCause:
+                "Production build contains userdebug/eng debug build configuration.",
+              remediationDesc:
+                "Produce a user build with ro.debuggable=0 and ro.secure=1.",
             }),
           );
         }
@@ -185,10 +199,11 @@ export class DeviceInterfaceAnalyzer {
               cvssVector: "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
               cvssScore: 7.7,
               cweId: "CWE-693" as CweId,
-              technicalDescription:
-                `SELinux is currently running in '${String(raw.selinux)}' mode, disabling mandatory access control (MAC) protection.`,
-              rootCause: "Kernel command line contains androidboot.selinux=permissive.",
-              remediationDesc: "Enforce SELinux in enforcing mode in production boot configuration.",
+              technicalDescription: `SELinux is currently running in '${String(raw.selinux)}' mode, disabling mandatory access control (MAC) protection.`,
+              rootCause:
+                "Kernel command line contains androidboot.selinux=permissive.",
+              remediationDesc:
+                "Enforce SELinux in enforcing mode in production boot configuration.",
             }),
           );
         }

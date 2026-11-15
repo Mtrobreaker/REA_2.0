@@ -24,7 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_assessments_status ON assessments(status);
 
 -- 2. Assets (target hierarchy)
 CREATE TABLE IF NOT EXISTS assets (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
   assessment_id TEXT NOT NULL,
   parent_asset_id TEXT,
   name TEXT NOT NULL,
@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS assets (
   tags_json TEXT NOT NULL DEFAULT '[]',
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at INTEGER NOT NULL,
+  PRIMARY KEY(assessment_id, id),
   FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
 );
 
@@ -64,7 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_obs_assessment ON observations(assessment_id);
 
 -- 4. Tasks (evolved PackBoard with dependencies and fencing tokens)
 CREATE TABLE IF NOT EXISTS tasks (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
   assessment_id TEXT NOT NULL,
   task_type TEXT NOT NULL DEFAULT 'lead_investigation',
   title TEXT NOT NULL,
@@ -90,6 +91,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   evidence_hashes_json TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  PRIMARY KEY(assessment_id, id),
   FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
 );
 
@@ -118,7 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_agents_heartbeat ON agents(assessment_id, heartbe
 
 -- 6. Findings (6-state vulnerability lifecycle)
 CREATE TABLE IF NOT EXISTS findings (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
   assessment_id TEXT NOT NULL,
   fingerprint TEXT NOT NULL,
   asset_id TEXT NOT NULL,
@@ -134,6 +136,7 @@ CREATE TABLE IF NOT EXISTS findings (
   cas_version INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  PRIMARY KEY(assessment_id, id),
   FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
 );
 
@@ -206,26 +209,28 @@ export function applyBlackboardMigrations(db: DatabaseSync): void {
 
   // Check if schema_migrations table exists
   const hasMigrations = db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+    )
     .get();
 
   if (!hasMigrations) {
     db.exec(BLACKBOARD_SCHEMA_DDL);
-    db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
-      BLACKBOARD_CURRENT_SCHEMA_VERSION,
-      Date.now(),
-    );
+    db.prepare(
+      "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+    ).run(BLACKBOARD_CURRENT_SCHEMA_VERSION, Date.now());
   } else {
     // Schema migrations table exists; check version
-    const row = db.prepare("SELECT MAX(version) as max_v FROM schema_migrations").get() as any;
+    const row = db
+      .prepare("SELECT MAX(version) as max_v FROM schema_migrations")
+      .get() as any;
     const currentV = row?.max_v ?? 0;
 
     if (currentV < BLACKBOARD_CURRENT_SCHEMA_VERSION) {
       db.exec(BLACKBOARD_SCHEMA_DDL);
-      db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(
-        BLACKBOARD_CURRENT_SCHEMA_VERSION,
-        Date.now(),
-      );
+      db.prepare(
+        "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+      ).run(BLACKBOARD_CURRENT_SCHEMA_VERSION, Date.now());
     }
   }
 
@@ -349,4 +354,3 @@ function createLeadsViewWithTriggers(db: DatabaseSync): void {
     END;
   `);
 }
-

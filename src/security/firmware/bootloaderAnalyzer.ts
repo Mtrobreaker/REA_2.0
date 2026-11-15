@@ -6,7 +6,10 @@ import {
   type SecurityFinding,
 } from "../../domain/security/finding.js";
 import type { AssetId, AssetRecord } from "../../domain/security/asset.js";
-import type { CweId, SecuritySeverityLevel } from "../../domain/security/classification.js";
+import type {
+  CweId,
+  SecuritySeverityLevel,
+} from "../../domain/security/classification.js";
 
 export interface BootloaderAnalysisResult {
   readonly path: string;
@@ -21,7 +24,9 @@ export class BootloaderAnalyzer {
     asset?: AssetRecord,
   ): Promise<Result<BootloaderAnalysisResult, Error>> {
     if (!existsSync(filePath)) {
-      return err(new Error(`Bootloader environment file not found: ${filePath}`));
+      return err(
+        new Error(`Bootloader environment file not found: ${filePath}`),
+      );
     }
 
     const content = readFileSync(filePath, "utf-8");
@@ -87,7 +92,7 @@ export class BootloaderAnalyzer {
         impact: {
           description: "Execution hijacking or physical shell access bypass.",
           attack_prerequisites: ["Serial console or adjacent network access"],
-          exploitability: "PROVEN",
+          exploitability: "THEORETICAL",
         },
         severity: {
           level: opts.severity,
@@ -114,7 +119,7 @@ export class BootloaderAnalyzer {
           mitre_attack: [],
           owasp: [],
         },
-        verification_status: "UNVERIFIED",
+        verification_status: "CANDIDATE",
         provenance: {
           discovered_by: "bootloader-analyzer",
           discovered_at: new Date().toISOString(),
@@ -136,7 +141,10 @@ export class BootloaderAnalyzer {
         rawVariables[key] = value;
 
         if (key === "bootargs") {
-          if (value.includes("init=/bin/sh") || value.includes("init=/bin/bash")) {
+          if (
+            value.includes("init=/bin/sh") ||
+            value.includes("init=/bin/bash")
+          ) {
             findings.push(
               makeFinding({
                 name: "Insecure Bootloader Init Argument (init=/bin/sh)",
@@ -147,8 +155,10 @@ export class BootloaderAnalyzer {
                 line: i + 1,
                 technicalDescription:
                   "The bootloader bootargs contains 'init=/bin/sh', which forces the kernel to bypass user authentication and launch a root shell.",
-                rootCause: "Development debug parameter retained in bootloader environment.",
-                remediationDesc: "Remove 'init=/bin/sh' from bootargs and restore standard init daemon path.",
+                rootCause:
+                  "Development debug parameter retained in bootloader environment.",
+                remediationDesc:
+                  "Remove 'init=/bin/sh' from bootargs and restore standard init daemon path.",
               }),
             );
           }
@@ -167,7 +177,8 @@ export class BootloaderAnalyzer {
                 technicalDescription:
                   "The bootloader executes network TFTP booting without image signature verification, allowing network attackers to boot malicious kernels.",
                 rootCause: "Unverified TFTP network boot sequence in bootcmd.",
-                remediationDesc: "Enforce cryptographic image verification (FIT image with signed hash) before booting network payloads.",
+                remediationDesc:
+                  "Enforce cryptographic image verification (FIT image with signed hash) before booting network payloads.",
               }),
             );
           }

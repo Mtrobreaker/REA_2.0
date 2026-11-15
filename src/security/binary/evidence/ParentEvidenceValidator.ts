@@ -1,12 +1,14 @@
 /* eslint-disable max-lines-per-function */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import canonicalize from "canonicalize";
 import { err, ok, type Result } from "../../../domain/result.js";
 import type { AssessmentId } from "../../../domain/security/assessment.js";
 import type { AssetId } from "../../../domain/security/asset.js";
 import type { BlackboardAssetRecord } from "../../../domain/security/blackboard/types.js";
-import type { FindingRecord, FindingState } from "../../../domain/security/blackboard/types.js";
+import type {
+  FindingRecord,
+  FindingState,
+} from "../../../domain/security/blackboard/types.js";
 import type {
   AdjudicatedFindingResult,
   VulnerabilityCandidate,
@@ -15,17 +17,11 @@ import {
   BINARY_WORKER_PROTOCOL_VERSION,
   type BinaryWorkerAnalyzeResponse,
   type RawCandidate,
-  type RawDecoderPayload,
-  type RawCfgPayload,
-  type RawReachabilityPayload,
-  type RawTaintPayload,
-  type RawWitnessPayload,
 } from "../ipc/binaryWorkerProtocol.js";
 import {
   AUTHORIZED_PROVIDERS,
   canonicalDigest,
   deepFreeze,
-  deepClonePlain,
   TrustedEvidenceAuthority,
   type StageContext,
 } from "./TrustedAnalysisEvidence.js";
@@ -38,10 +34,7 @@ import type {
   TrustedAnalysisEvidence,
   WitnessPayload,
 } from "./types.js";
-import {
-  VulnerabilityAdjudicationBridge,
-  type AdjudicationBridgeOptions,
-} from "../VulnerabilityAdjudicationBridge.js";
+import { VulnerabilityAdjudicationBridge } from "../VulnerabilityAdjudicationBridge.js";
 import type { SqliteBlackboardStorage } from "../../blackboard/SqliteBlackboardStorage.js";
 
 // ============================================================================
@@ -94,11 +87,17 @@ export interface ValidatedWorkerPayload {
 }
 
 export interface ValidatedEvidenceBundle {
-  readonly decoderEvidence?: TrustedAnalysisEvidence<DecoderPayload> | undefined;
+  readonly decoderEvidence?:
+    | TrustedAnalysisEvidence<DecoderPayload>
+    | undefined;
   readonly cfgEvidence?: TrustedAnalysisEvidence<CfgPayload> | undefined;
-  readonly reachabilityEvidence?: TrustedAnalysisEvidence<ReachabilityPayload> | undefined;
+  readonly reachabilityEvidence?:
+    | TrustedAnalysisEvidence<ReachabilityPayload>
+    | undefined;
   readonly taintEvidence?: TrustedAnalysisEvidence<TaintPayload> | undefined;
-  readonly witnessEvidence?: TrustedAnalysisEvidence<WitnessPayload> | undefined;
+  readonly witnessEvidence?:
+    | TrustedAnalysisEvidence<WitnessPayload>
+    | undefined;
   readonly candidates: readonly RawCandidate[];
 }
 
@@ -169,7 +168,9 @@ export class ParentEvidenceValidator {
       });
     }
 
-    if (response.binarySha256.toLowerCase() !== context.binarySha256.toLowerCase()) {
+    if (
+      response.binarySha256.toLowerCase() !== context.binarySha256.toLowerCase()
+    ) {
       return err({
         code: "CONTEXT_MISMATCH",
         message: `Binary digest mismatch: expected ${context.binarySha256}, got ${response.binarySha256}`,
@@ -177,7 +178,10 @@ export class ParentEvidenceValidator {
       });
     }
 
-    if (context.firmwareSha256 && response.firmwareSha256 !== context.firmwareSha256) {
+    if (
+      context.firmwareSha256 &&
+      response.firmwareSha256 !== context.firmwareSha256
+    ) {
       return err({
         code: "CONTEXT_MISMATCH",
         message: `Firmware digest mismatch: expected ${context.firmwareSha256}, got ${response.firmwareSha256 ?? "none"}`,
@@ -217,7 +221,10 @@ export class ParentEvidenceValidator {
       });
     }
 
-    if (context.requestedStage !== "ALL" && response.stage !== context.requestedStage) {
+    if (
+      context.requestedStage !== "ALL" &&
+      response.stage !== context.requestedStage
+    ) {
       return err({
         code: "CONTEXT_MISMATCH",
         message: `Stage mismatch: expected ${context.requestedStage}, got ${response.stage}`,
@@ -241,14 +248,18 @@ export class ParentEvidenceValidator {
     }
 
     if (inputBytes) {
-      const computedSha256 = createHash("sha256").update(inputBytes).digest("hex");
+      const computedSha256 = createHash("sha256")
+        .update(inputBytes)
+        .digest("hex");
       if (computedSha256.toLowerCase() !== context.binarySha256.toLowerCase()) {
         return err({
           code: "INPUT_INTEGRITY_VIOLATION",
           message: `Parent binary bytes digest ${computedSha256} does not match expected binary SHA-256 ${context.binarySha256}`,
         });
       }
-      if (response.binarySha256.toLowerCase() !== computedSha256.toLowerCase()) {
+      if (
+        response.binarySha256.toLowerCase() !== computedSha256.toLowerCase()
+      ) {
         return err({
           code: "INPUT_INTEGRITY_VIOLATION",
           message: `Worker reported binarySha256 ${response.binarySha256} does not match parent computed digest ${computedSha256}`,
@@ -269,7 +280,10 @@ export class ParentEvidenceValidator {
       });
     }
 
-    if (computedPayloadDigest.toLowerCase() !== response.resultDigest.toLowerCase()) {
+    if (
+      computedPayloadDigest.toLowerCase() !==
+      response.resultDigest.toLowerCase()
+    ) {
       return err({
         code: "DIGEST_MISMATCH",
         message: `Worker resultDigest tampered: declared ${response.resultDigest}, calculated ${computedPayloadDigest}`,
@@ -287,7 +301,8 @@ export class ParentEvidenceValidator {
     ) {
       return err({
         code: "UNAUTHORIZED_AUTHORITY_INJECTION",
-        message: "Worker resultPayload contains disallowed authority fields or forged signatures",
+        message:
+          "Worker resultPayload contains disallowed authority fields or forged signatures",
       });
     }
 
@@ -295,7 +310,11 @@ export class ParentEvidenceValidator {
     let decoderPayload: DecoderPayload | undefined;
     if (payload.decoder) {
       const dec = payload.decoder;
-      if (dec.totalBytes < 0 || dec.decodedBytes < 0 || dec.decodedBytes > dec.totalBytes) {
+      if (
+        dec.totalBytes < 0 ||
+        dec.decodedBytes < 0 ||
+        dec.decodedBytes > dec.totalBytes
+      ) {
         return err({
           code: "STRUCTURAL_INCONSISTENCY",
           message: `Invalid decoder byte counts: decoded ${dec.decodedBytes} of ${dec.totalBytes}`,
@@ -346,7 +365,9 @@ export class ParentEvidenceValidator {
         totalBytes: dec.totalBytes,
         decodedBytes: dec.decodedBytes,
         instructions: dec.instructions as any,
-        ...(dec.unhandledByteOffset !== undefined ? { unhandledByteOffset: dec.unhandledByteOffset } : {}),
+        ...(dec.unhandledByteOffset !== undefined
+          ? { unhandledByteOffset: dec.unhandledByteOffset }
+          : {}),
         ...(dec.haltReason !== undefined ? { haltReason: dec.haltReason } : {}),
         provenance: {
           actualProvider,
@@ -365,10 +386,16 @@ export class ParentEvidenceValidator {
 
       for (const block of cfg.blocks) {
         if (!block.id || block.id.trim().length === 0) {
-          return err({ code: "STRUCTURAL_INCONSISTENCY", message: "CFG basic block has empty ID" });
+          return err({
+            code: "STRUCTURAL_INCONSISTENCY",
+            message: "CFG basic block has empty ID",
+          });
         }
         if (blockIds.has(block.id)) {
-          return err({ code: "STRUCTURAL_INCONSISTENCY", message: `Duplicate CFG block ID: '${block.id}'` });
+          return err({
+            code: "STRUCTURAL_INCONSISTENCY",
+            message: `Duplicate CFG block ID: '${block.id}'`,
+          });
         }
         blockIds.add(block.id);
 
@@ -419,7 +446,10 @@ export class ParentEvidenceValidator {
     if (payload.reachability) {
       const rch = payload.reachability;
       if (!rch.entryPoint || !rch.target) {
-        return err({ code: "STRUCTURAL_INCONSISTENCY", message: "Reachability missing entryPoint or target" });
+        return err({
+          code: "STRUCTURAL_INCONSISTENCY",
+          message: "Reachability missing entryPoint or target",
+        });
       }
 
       // Check provider authorization
@@ -449,11 +479,17 @@ export class ParentEvidenceValidator {
     if (payload.taint) {
       const t = payload.taint;
       if (!t.sink || !t.sink.api) {
-        return err({ code: "STRUCTURAL_INCONSISTENCY", message: "Taint payload missing valid sink API" });
+        return err({
+          code: "STRUCTURAL_INCONSISTENCY",
+          message: "Taint payload missing valid sink API",
+        });
       }
 
       taintPayload = {
         status: t.status,
+        ...(t.stageStatus !== undefined ? { stageStatus: t.stageStatus } : {}),
+        ...(t.ruleId !== undefined ? { ruleId: t.ruleId } : {}),
+        ...(t.category !== undefined ? { category: t.category } : {}),
         source: t.source as any,
         sink: t.sink as any,
         steps: t.steps as any,
@@ -469,7 +505,10 @@ export class ParentEvidenceValidator {
     if (payload.witness) {
       const w = payload.witness;
       if (!w.witnessId || !w.ruleId || !w.category) {
-        return err({ code: "STRUCTURAL_INCONSISTENCY", message: "Witness payload missing witnessId, ruleId, or category" });
+        return err({
+          code: "STRUCTURAL_INCONSISTENCY",
+          message: "Witness payload missing witnessId, ruleId, or category",
+        });
       }
 
       witnessPayload = {
@@ -477,6 +516,11 @@ export class ParentEvidenceValidator {
         findingId: (w as any).findingId ?? `find_${w.ruleId}`,
         ruleId: w.ruleId,
         category: w.category,
+        ...(w.sinkApi !== undefined ? { sinkApi: w.sinkApi } : {}),
+        ...(w.stageStatus !== undefined ? { stageStatus: w.stageStatus } : {}),
+        ...(w.satisfiabilityStatus !== undefined
+          ? { satisfiabilityStatus: w.satisfiabilityStatus }
+          : {}),
         isSatisfiable: w.isSatisfiable,
         isReproducible: w.isReproducible,
         exploitabilityStatus: w.exploitabilityStatus,
@@ -509,7 +553,8 @@ export class ParentEvidenceValidator {
       if (reachabilityPayload && reachabilityPayload.status === "UNREACHABLE") {
         return err({
           code: "COMPLETENESS_CONTRADICTION",
-          message: "Contradiction: Reachability claimed definitive UNREACHABLE on partial or failed decode",
+          message:
+            "Contradiction: Reachability claimed definitive UNREACHABLE on partial or failed decode",
         });
       }
     }
@@ -519,17 +564,20 @@ export class ParentEvidenceValidator {
       if (cfgPayload && !cfgPayload.isComplete) {
         return err({
           code: "COMPLETENESS_CONTRADICTION",
-          message: "Contradiction: Reachability claimed UNREACHABLE on incomplete CFG",
+          message:
+            "Contradiction: Reachability claimed UNREACHABLE on incomplete CFG",
         });
       }
 
       const hasIndirectJumps = reachabilityPayload.paths.some(
-        (p) => p.unresolvedIndirectJumps && p.unresolvedIndirectJumps.length > 0,
+        (p) =>
+          p.unresolvedIndirectJumps && p.unresolvedIndirectJumps.length > 0,
       );
       if (hasIndirectJumps) {
         return err({
           code: "COMPLETENESS_CONTRADICTION",
-          message: "Contradiction: Reachability claimed UNREACHABLE with unresolved indirect jumps",
+          message:
+            "Contradiction: Reachability claimed UNREACHABLE with unresolved indirect jumps",
         });
       }
     }
@@ -570,7 +618,9 @@ export class ParentEvidenceValidator {
 
     let decoderEvidence: TrustedAnalysisEvidence<DecoderPayload> | undefined;
     let cfgEvidence: TrustedAnalysisEvidence<CfgPayload> | undefined;
-    let reachabilityEvidence: TrustedAnalysisEvidence<ReachabilityPayload> | undefined;
+    let reachabilityEvidence:
+      | TrustedAnalysisEvidence<ReachabilityPayload>
+      | undefined;
     let taintEvidence: TrustedAnalysisEvidence<TaintPayload> | undefined;
     let witnessEvidence: TrustedAnalysisEvidence<WitnessPayload> | undefined;
 
@@ -593,7 +643,8 @@ export class ParentEvidenceValidator {
       if (!decoderEvidence) {
         return err({
           code: "LINEAGE_INVALID",
-          message: "Cannot seal CFG evidence: Missing required parent decoder evidence",
+          message:
+            "Cannot seal CFG evidence: Missing required parent decoder evidence",
         });
       }
 
@@ -614,7 +665,8 @@ export class ParentEvidenceValidator {
       if (!cfgEvidence) {
         return err({
           code: "LINEAGE_INVALID",
-          message: "Cannot seal Reachability evidence: Missing required parent CFG evidence",
+          message:
+            "Cannot seal Reachability evidence: Missing required parent CFG evidence",
         });
       }
 
@@ -635,7 +687,8 @@ export class ParentEvidenceValidator {
       if (!cfgEvidence) {
         return err({
           code: "LINEAGE_INVALID",
-          message: "Cannot seal Taint evidence: Missing required parent CFG evidence",
+          message:
+            "Cannot seal Taint evidence: Missing required parent CFG evidence",
         });
       }
 
@@ -656,7 +709,8 @@ export class ParentEvidenceValidator {
       if (!taintEvidence) {
         return err({
           code: "LINEAGE_INVALID",
-          message: "Cannot seal Witness evidence: Missing required parent Taint evidence",
+          message:
+            "Cannot seal Witness evidence: Missing required parent Taint evidence",
         });
       }
 
@@ -693,7 +747,8 @@ export class ParentEvidenceValidator {
   public adjudicateAndPersist(
     options: AdjudicationPersistOptions,
   ): Result<AdjudicatedFindingResult, { code: string; message: string }> {
-    const { storage, authority, bridge, asset, candidate, bundle, context } = options;
+    const { storage, authority, bridge, asset, candidate, bundle, context } =
+      options;
 
     // Execute everything inside an atomic SQLite transaction
     return storage.transaction((tx) => {
@@ -703,7 +758,9 @@ export class ParentEvidenceValidator {
         .get(context.taskId) as any;
 
       if (!taskRow) {
-        throw new Error(`TASK_NOT_FOUND: Task ${context.taskId} does not exist in blackboard`);
+        throw new Error(
+          `TASK_NOT_FOUND: Task ${context.taskId} does not exist in blackboard`,
+        );
       }
       if (taskRow.fencing_token !== context.fencingToken) {
         throw new Error(
@@ -715,10 +772,14 @@ export class ParentEvidenceValidator {
       const runManager = authority.getRunManager();
       const run = runManager.getRun(context.runId);
       if (!run) {
-        throw new Error(`RUN_VERIFICATION_FAILED: Run ${context.runId} not found`);
+        throw new Error(
+          `RUN_VERIFICATION_FAILED: Run ${context.runId} not found`,
+        );
       }
       if (run.status !== "ACTIVE") {
-        throw new Error(`RUN_VERIFICATION_FAILED: Run ${context.runId} status is ${run.status} (RUN_${run.status})`);
+        throw new Error(
+          `RUN_VERIFICATION_FAILED: Run ${context.runId} status is ${run.status} (RUN_${run.status})`,
+        );
       }
       if (run.assessmentId !== context.assessmentId) {
         throw new Error(
@@ -730,7 +791,9 @@ export class ParentEvidenceValidator {
           `RUN_VERIFICATION_FAILED: Run assetId ${run.assetId} does not match context ${context.assetId}`,
         );
       }
-      if (run.binarySha256.toLowerCase() !== context.binarySha256.toLowerCase()) {
+      if (
+        run.binarySha256.toLowerCase() !== context.binarySha256.toLowerCase()
+      ) {
         throw new Error(
           `RUN_VERIFICATION_FAILED: Run binarySha256 ${run.binarySha256} does not match context ${context.binarySha256}`,
         );
@@ -745,7 +808,9 @@ export class ParentEvidenceValidator {
       if (bundle.witnessEvidence && isWitnessMatchingCandidate) {
         const witnessEvidenceId = bundle.witnessEvidence.claims.evidenceId;
         if (runManager.isEvidenceConsumed(witnessEvidenceId)) {
-          throw new Error(`WITNESS_REPLAY_DETECTED: Evidence ${witnessEvidenceId} has already been consumed (REPLAY_DETECTED)`);
+          throw new Error(
+            `WITNESS_REPLAY_DETECTED: Evidence ${witnessEvidenceId} has already been consumed (REPLAY_DETECTED)`,
+          );
         }
       }
 
@@ -816,7 +881,9 @@ export class ParentEvidenceValidator {
             JSON.stringify(adjudicated.finding.confidence),
             JSON.stringify(adjudicated.finding.location),
             JSON.stringify(adjudicated.finding.evidence_ids),
-            adjudicated.finding.remediation ? JSON.stringify(adjudicated.finding.remediation) : null,
+            adjudicated.finding.remediation
+              ? JSON.stringify(adjudicated.finding.remediation)
+              : null,
             now,
             now,
           );

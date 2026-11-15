@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { localPathStringSchema, nulFreeStringSchema } from "../domain/localPath.js";
+import {
+  localPathStringSchema,
+  nulFreeStringSchema,
+} from "../domain/localPath.js";
 import {
   assessmentDepthSchema,
   assessmentIdSchema,
@@ -46,11 +49,15 @@ export const startSecurityAssessmentSchema = z.strictObject({
   target_technologies: z
     .array(z.string())
     .default([])
-    .describe("Specific technologies under assessment (e.g. firmware, c, rtl)"),
+    .describe(
+      "Specific technologies under assessment (e.g. firmware, c, embedded_linux)",
+    ),
   compliance_frameworks: z
     .array(z.string())
     .default([])
-    .describe("Applicable compliance frameworks (e.g. OWASP_TOP_10, CWE_TOP_25)"),
+    .describe(
+      "Applicable compliance frameworks (e.g. OWASP_TOP_10, CWE_TOP_25)",
+    ),
   depth: assessmentDepthSchema
     .default("standard")
     .describe("Analysis depth: surface, standard, or exhaustive"),
@@ -139,7 +146,9 @@ export type CalculateCvssInput = z.infer<typeof calculateCvssSchema>;
  * Input schema to generate an explainable cybersecurity report.
  */
 export const generateSecurityReportSchema = z.strictObject({
-  assessment_id: assessmentIdSchema.describe("Assessment to generate report for"),
+  assessment_id: assessmentIdSchema.describe(
+    "Assessment to generate report for",
+  ),
   format: z
     .enum(["markdown", "json", "sarif", "html"])
     .default("markdown")
@@ -176,9 +185,7 @@ export const scanSecurityTargetSchema = z.strictObject({
     .describe("Output report format"),
 });
 
-export type ScanSecurityTargetInput = z.infer<
-  typeof scanSecurityTargetSchema
->;
+export type ScanSecurityTargetInput = z.infer<typeof scanSecurityTargetSchema>;
 
 /**
  * Input schema to perform deep firmware security inspection.
@@ -220,19 +227,6 @@ export const embeddedOsAuditSchema = z.strictObject({
 export type EmbeddedOsAuditInput = z.infer<typeof embeddedOsAuditSchema>;
 
 /**
- * Input schema to perform hardware RTL security inspection.
- */
-export const hardwareRtlInspectionSchema = z.strictObject({
-  path: localPathStringSchema.describe(
-    "Absolute local file or device path to analyze",
-  ),
-});
-
-export type HardwareRtlInspectionInput = z.infer<
-  typeof hardwareRtlInspectionSchema
->;
-
-/**
  * Input schema to run full 10-agent multi-agent security assessment.
  */
 export const runMultiAgentAssessmentSchema = z.strictObject({
@@ -248,9 +242,7 @@ export const runMultiAgentAssessmentSchema = z.strictObject({
   authorization_reference: nulFreeStringSchema
     .default("MCP-TASK-AUTH")
     .describe("Authorization reference ticket"),
-  depth: assessmentDepthSchema
-    .default("standard")
-    .describe("Assessment depth"),
+  depth: assessmentDepthSchema.default("standard").describe("Assessment depth"),
   format: z
     .enum(["markdown", "json", "sarif", "html"])
     .default("markdown")
@@ -261,4 +253,11 @@ export type RunMultiAgentAssessmentInput = z.infer<
   typeof runMultiAgentAssessmentSchema
 >;
 
-
+export const hardwareRtlInspectionSchema = z.strictObject({
+  path: localPathStringSchema.describe(
+    "Absolute local file or device path to analyze",
+  ),
+});
+export type HardwareRtlInspectionInput = z.infer<
+  typeof hardwareRtlInspectionSchema
+>;

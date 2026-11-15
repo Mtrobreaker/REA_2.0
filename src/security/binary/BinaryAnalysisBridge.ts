@@ -1,3 +1,4 @@
+import { InProcessInstructionDecoder } from "./cfg/InProcessInstructionDecoder.js";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { err, ok, type Result } from "../../domain/result.js";
@@ -83,17 +84,23 @@ class SafeElfReader {
 
   public u16(offset: number): number {
     if (offset < 0 || offset + 2 > this.buffer.length) return 0;
-    return this.isLE ? this.buffer.readUInt16LE(offset) : this.buffer.readUInt16BE(offset);
+    return this.isLE
+      ? this.buffer.readUInt16LE(offset)
+      : this.buffer.readUInt16BE(offset);
   }
 
   public u32(offset: number): number {
     if (offset < 0 || offset + 4 > this.buffer.length) return 0;
-    return this.isLE ? this.buffer.readUInt32LE(offset) : this.buffer.readUInt32BE(offset);
+    return this.isLE
+      ? this.buffer.readUInt32LE(offset)
+      : this.buffer.readUInt32BE(offset);
   }
 
   public u64(offset: number): bigint {
     if (offset < 0 || offset + 8 > this.buffer.length) return 0n;
-    return this.isLE ? this.buffer.readBigUInt64LE(offset) : this.buffer.readBigUInt64BE(offset);
+    return this.isLE
+      ? this.buffer.readBigUInt64LE(offset)
+      : this.buffer.readBigUInt64BE(offset);
   }
 
   public hexAddress(offset: number, is64: boolean): string {
@@ -148,7 +155,8 @@ export class BinaryAnalysisBridge {
     } else {
       return err({
         code: "INVALID_BINARY",
-        message: "Neither file path nor buffer was supplied to BinaryAnalysisBridge",
+        message:
+          "Neither file path nor buffer was supplied to BinaryAnalysisBridge",
       });
     }
 
@@ -160,7 +168,12 @@ export class BinaryAnalysisBridge {
     }
 
     // Verify ELF magic: 0x7f 'E' 'L' 'F'
-    if (bytes[0] !== 0x7f || bytes[1] !== 0x45 || bytes[2] !== 0x4c || bytes[3] !== 0x46) {
+    if (
+      bytes[0] !== 0x7f ||
+      bytes[1] !== 0x45 ||
+      bytes[2] !== 0x4c ||
+      bytes[3] !== 0x46
+    ) {
       return err({
         code: "INVALID_BINARY",
         message: "Target is not a valid ELF binary (missing 0x7fELF header)",
@@ -238,7 +251,8 @@ export class BinaryAnalysisBridge {
     }
 
     const getSectionName = (nameOffset: number): string => {
-      if (shstrtabOffset <= 0 || nameOffset < 0 || nameOffset >= shstrtabSize) return "";
+      if (shstrtabOffset <= 0 || nameOffset < 0 || nameOffset >= shstrtabSize)
+        return "";
       return reader.cString(shstrtabOffset + nameOffset);
     };
 
@@ -255,15 +269,25 @@ export class BinaryAnalysisBridge {
     let symtabSize = 0;
     let symtabEntSize = is64 ? 24 : 16;
 
-    if (e_shoff > 0 && e_shnum > 0 && e_shoff + e_shnum * e_shentsize <= bytes.length) {
+    if (
+      e_shoff > 0 &&
+      e_shnum > 0 &&
+      e_shoff + e_shnum * e_shentsize <= bytes.length
+    ) {
       for (let i = 0; i < e_shnum; i++) {
         const shOffset = e_shoff + i * e_shentsize;
         const sh_name = reader.u32(shOffset);
         const sh_type = reader.u32(shOffset + 4);
-        const sh_flags = is64 ? Number(reader.u64(shOffset + 8)) : reader.u32(shOffset + 8);
+        const sh_flags = is64
+          ? Number(reader.u64(shOffset + 8))
+          : reader.u32(shOffset + 8);
         const sh_addr = reader.hexAddress(shOffset + (is64 ? 16 : 12), is64);
-        const sh_offset = is64 ? Number(reader.u64(shOffset + 24)) : reader.u32(shOffset + 16);
-        const sh_size = is64 ? Number(reader.u64(shOffset + 32)) : reader.u32(shOffset + 20);
+        const sh_offset = is64
+          ? Number(reader.u64(shOffset + 24))
+          : reader.u32(shOffset + 16);
+        const sh_size = is64
+          ? Number(reader.u64(shOffset + 32))
+          : reader.u32(shOffset + 20);
 
         const name = getSectionName(sh_name) || `section_${i}`;
         const typeName = this.getSectionTypeName(sh_type);
@@ -301,7 +325,11 @@ export class BinaryAnalysisBridge {
     let dynamicSegmentOffset = 0;
     let dynamicSegmentSize = 0;
 
-    if (e_phoff > 0 && e_phnum > 0 && e_phoff + e_phnum * e_phentsize <= bytes.length) {
+    if (
+      e_phoff > 0 &&
+      e_phnum > 0 &&
+      e_phoff + e_phnum * e_phentsize <= bytes.length
+    ) {
       for (let i = 0; i < e_phnum; i++) {
         const phOffset = e_phoff + i * e_phentsize;
         const p_type = reader.u32(phOffset);
@@ -349,18 +377,26 @@ export class BinaryAnalysisBridge {
 
     // 4. Parse Dynamic Libraries (DT_NEEDED from PT_DYNAMIC)
     const dynamicLibraries: string[] = [];
-    if (dynamicSegmentOffset > 0 && dynamicSegmentOffset + dynamicSegmentSize <= bytes.length) {
+    if (
+      dynamicSegmentOffset > 0 &&
+      dynamicSegmentOffset + dynamicSegmentSize <= bytes.length
+    ) {
       const entrySize = is64 ? 16 : 8;
       const numEntries = Math.floor(dynamicSegmentSize / entrySize);
       for (let i = 0; i < numEntries; i++) {
         const entryOffset = dynamicSegmentOffset + i * entrySize;
-        const tag = is64 ? Number(reader.u64(entryOffset)) : reader.u32(entryOffset);
-        const val = is64 ? Number(reader.u64(entryOffset + 8)) : reader.u32(entryOffset + 4);
+        const tag = is64
+          ? Number(reader.u64(entryOffset))
+          : reader.u32(entryOffset);
+        const val = is64
+          ? Number(reader.u64(entryOffset + 8))
+          : reader.u32(entryOffset + 4);
 
         if (tag === 0) break; // DT_NULL
         if (tag === 1) {
           // DT_NEEDED
-          const libStringOffset = (dynstrOffset > 0 ? dynstrOffset : strtabOffset) + val;
+          const libStringOffset =
+            (dynstrOffset > 0 ? dynstrOffset : strtabOffset) + val;
           const libName = reader.cString(libStringOffset);
           if (libName && !dynamicLibraries.includes(libName)) {
             dynamicLibraries.push(libName);
@@ -380,7 +416,12 @@ export class BinaryAnalysisBridge {
       entSize: number,
       stringTableOffset: number,
     ) => {
-      if (tableOffset <= 0 || tableSize <= 0 || tableOffset + tableSize > bytes.length) return;
+      if (
+        tableOffset <= 0 ||
+        tableSize <= 0 ||
+        tableOffset + tableSize > bytes.length
+      )
+        return;
       const count = Math.floor(tableSize / entSize);
 
       for (let i = 0; i < count; i++) {
@@ -443,7 +484,10 @@ export class BinaryAnalysisBridge {
             break;
         }
 
-        const address = st_value > 0n ? `0x${st_value.toString(16).padStart(is64 ? 16 : 8, "0")}` : null;
+        const address =
+          st_value > 0n
+            ? `0x${st_value.toString(16).padStart(is64 ? 16 : 8, "0")}`
+            : null;
 
         const symbol: BinarySymbol = {
           name: symName,
@@ -481,12 +525,20 @@ export class BinaryAnalysisBridge {
     const strings = this.extractStrings(bytes, sections);
 
     // 7. Extract Functions, Call Relationships, and Security-Sensitive Calls
-    const { functions, callRelationships, securitySensitiveCalls } = this.deriveFunctionAnalysis(
+    const {
+      functions,
+      callRelationships,
+      securitySensitiveCalls,
+      unresolvedSensitiveImports,
+      callResolutionComplete,
+    } = this.deriveFunctionAnalysis(
       allSymbols,
       importedSymbols,
       strings,
       sections,
       bytes,
+      architecture,
+      isLE,
     );
 
     const isExecutable =
@@ -505,6 +557,7 @@ export class BinaryAnalysisBridge {
       exportedSymbols,
       strings,
       isExecutable,
+      unresolvedSensitiveImports,
     };
 
     return ok({
@@ -513,6 +566,7 @@ export class BinaryAnalysisBridge {
       callRelationships,
       securitySensitiveCalls,
       decompiledFunctions: {}, // External decompiler not operational on this host
+      callResolutionComplete,
       provenance: {
         provider: "rea_inprocess_elf_engine",
         version: "rea-6.7.0",
@@ -548,7 +602,8 @@ export class BinaryAnalysisBridge {
             const strVal = bytes.subarray(currentStart, i).toString("utf8");
             // Match corresponding section if known
             const sec = sections.find(
-              (s) => currentStart >= s.offset && currentStart < s.offset + s.size,
+              (s) =>
+                currentStart >= s.offset && currentStart < s.offset + s.size,
             );
             results.push({
               offset: currentStart,
@@ -565,28 +620,35 @@ export class BinaryAnalysisBridge {
   }
 
   /**
-   * Derive functions, calls, and security-sensitive sinks from symbols and strings.
+   * Derive functions, calls, and security-sensitive sinks from symbols, decoded call sites, and strings.
+   * NEVER creates a Cartesian product between recovered functions and imported APIs.
+   * Only creates function-level call relationships when actual decoded call-site evidence supports them.
    */
   private deriveFunctionAnalysis(
     allSymbols: readonly BinarySymbol[],
     importedSymbols: readonly BinarySymbol[],
     strings: readonly DiscoveredString[],
     sections: readonly ElfSectionHeader[],
-    _bytes: Buffer,
+    bytes: Buffer,
+    architecture: string,
+    isLE: boolean,
   ): {
     functions: DiscoveredFunction[];
     callRelationships: CallRelationship[];
     securitySensitiveCalls: SecuritySensitiveApiCall[];
+    unresolvedSensitiveImports: string[];
+    callResolutionComplete: boolean;
   } {
     const functions: DiscoveredFunction[] = [];
     const callRelationships: CallRelationship[] = [];
     const securitySensitiveCalls: SecuritySensitiveApiCall[] = [];
 
-    // 1. Gather all functions from defined symbols with type FUNC
-    const funcSymbols = allSymbols.filter((s) => s.type === "FUNC" && s.address !== null);
+    // 1. Gather all defined functions with type FUNC and non-null address
+    const funcSymbols = allSymbols.filter(
+      (s) => s.type === "FUNC" && s.address !== null,
+    );
     const textSection = sections.find((s) => s.name === ".text");
 
-    // Add main if not explicitly marked
     const hasMain = funcSymbols.some((s) => s.name === "main");
     if (!hasMain && textSection) {
       funcSymbols.push({
@@ -594,41 +656,136 @@ export class BinaryAnalysisBridge {
         type: "FUNC",
         binding: "GLOBAL",
         address: textSection.address,
-        size: 0,
+        size: textSection.size,
       });
     }
 
-    // 2. Identify imported sensitive APIs
-    const sensitiveImports = importedSymbols.filter((s) => SENSITIVE_APIS[s.name] !== undefined);
+    // Build address -> symbol map for symbols with resolved non-zero addresses
+    const addressToSymbol = new Map<number, BinarySymbol>();
+    for (const sym of allSymbols) {
+      if (sym.address) {
+        const addrNum = Number.parseInt(sym.address, 16);
+        if (Number.isFinite(addrNum) && addrNum > 0) {
+          addressToSymbol.set(addrNum, sym);
+        }
+      }
+    }
 
-    for (const func of funcSymbols) {
+    // Decode .text instructions if available and architecture is supported
+    const decodedCallSites: Array<{
+      address: number;
+      targetAddress: number | null;
+      operands: string;
+    }> = [];
+    let decoderComplete = false;
+    if (
+      textSection &&
+      textSection.offset > 0 &&
+      textSection.size > 0 &&
+      textSection.offset + textSection.size <= bytes.length &&
+      (architecture === "ARM" ||
+        architecture === "MIPS" ||
+        architecture === "x86_64")
+    ) {
+      const textBase = Number.parseInt(textSection.address, 16) || 0;
+      const textBytes = bytes.subarray(
+        textSection.offset,
+        textSection.offset + Math.min(textSection.size, 256 * 1024),
+      );
+      const decoder = new InProcessInstructionDecoder();
+      const decOut = decoder.decode(textBytes, textBase, {
+        architecture: architecture as "ARM" | "MIPS" | "x86_64",
+        isLittleEndian: isLE,
+      });
+      if (decOut.ok) {
+        decoderComplete = decOut.value.outcome === "SUCCESS";
+        for (const inst of decOut.value.instructions) {
+          if (inst.isCall) {
+            decodedCallSites.push({
+              address: inst.address,
+              targetAddress: inst.targetAddress ?? null,
+              operands: inst.operands,
+            });
+          }
+        }
+      }
+    }
+
+    // Sort function symbols by address to infer bounds when st_size === 0
+    const sortedFuncs = [...funcSymbols].sort((a, b) => {
+      const addrA = Number.parseInt(a.address ?? "0", 16) || 0;
+      const addrB = Number.parseInt(b.address ?? "0", 16) || 0;
+      return addrA - addrB;
+    });
+
+    const resolvedSensitiveApis = new Set<string>();
+
+    for (let i = 0; i < sortedFuncs.length; i++) {
+      const func = sortedFuncs[i]!;
       const funcName = func.name;
       const funcAddress = func.address ?? "0x0";
+      const startAddr = Number.parseInt(funcAddress, 16) || 0;
+      const nextFunc = sortedFuncs[i + 1];
+      const nextAddr = nextFunc
+        ? Number.parseInt(nextFunc.address ?? "0", 16) || 0
+        : 0;
+      const endAddr =
+        func.size > 0
+          ? startAddr + func.size
+          : nextAddr > startAddr
+            ? nextAddr
+            : textSection
+              ? (Number.parseInt(textSection.address, 16) || 0) +
+                textSection.size
+              : startAddr + 0x1000;
+
       const funcCalls: string[] = [];
       const funcSensitiveCalls: string[] = [];
       const funcStringRefs: string[] = [];
 
-      // If function is caller or main, link imported sensitive APIs
-      for (const sens of sensitiveImports) {
-        const category = SENSITIVE_APIS[sens.name]!;
-        funcCalls.push(sens.name);
-        funcSensitiveCalls.push(sens.name);
+      // Only create function-level call relationships when actual decoded call-site evidence exists
+      for (const site of decodedCallSites) {
+        if (site.address >= startAddr && site.address < endAddr) {
+          let calleeSym: BinarySymbol | undefined;
+          if (site.targetAddress !== null) {
+            calleeSym = addressToSymbol.get(site.targetAddress);
+          }
+          if (!calleeSym && site.operands) {
+            calleeSym = allSymbols.find(
+              (s) => s.name.length > 1 && site.operands.includes(s.name),
+            );
+          }
 
-        callRelationships.push({
-          caller: funcName,
-          callee: sens.name,
-          address: funcAddress,
-        });
+          if (calleeSym && calleeSym.name !== funcName) {
+            const callHex = `0x${site.address.toString(16)}`;
+            if (!funcCalls.includes(calleeSym.name)) {
+              funcCalls.push(calleeSym.name);
+            }
+            callRelationships.push({
+              caller: funcName,
+              callee: calleeSym.name,
+              address: callHex,
+            });
 
-        securitySensitiveCalls.push({
-          caller: funcName,
-          api: sens.name,
-          address: funcAddress,
-          category,
-        });
+            const category = SENSITIVE_APIS[calleeSym.name];
+            if (category !== undefined) {
+              if (!funcSensitiveCalls.includes(calleeSym.name)) {
+                funcSensitiveCalls.push(calleeSym.name);
+              }
+              resolvedSensitiveApis.add(calleeSym.name);
+              securitySensitiveCalls.push({
+                caller: funcName,
+                api: calleeSym.name,
+                address: callHex,
+                category,
+                callSiteResolved: true,
+              });
+            }
+          }
+        }
       }
 
-      // Associate relevant strings (e.g. commands, passwords, format strings)
+      // Associate relevant strings
       for (const s of strings) {
         const val = s.value.toLowerCase();
         if (
@@ -656,7 +813,37 @@ export class BinaryAnalysisBridge {
       });
     }
 
-    return { functions, callRelationships, securitySensitiveCalls };
+    // 2. Retain unresolved imported sensitive APIs strictly as binary-level import metadata
+    //    (1 entry per imported sensitive API, NEVER multiplied across every function).
+    const sensitiveImports = importedSymbols.filter(
+      (s) => SENSITIVE_APIS[s.name] !== undefined,
+    );
+    const unresolvedSensitiveImports: string[] = [];
+
+    for (const sens of sensitiveImports) {
+      if (!resolvedSensitiveApis.has(sens.name)) {
+        const category = SENSITIVE_APIS[sens.name]!;
+        unresolvedSensitiveImports.push(sens.name);
+        securitySensitiveCalls.push({
+          caller: "<symbol_table_import>",
+          api: sens.name,
+          address: undefined,
+          category,
+          callSiteResolved: false,
+        });
+      }
+    }
+
+    const callResolutionComplete =
+      decoderComplete && unresolvedSensitiveImports.length === 0;
+
+    return {
+      functions,
+      callRelationships,
+      securitySensitiveCalls,
+      unresolvedSensitiveImports,
+      callResolutionComplete,
+    };
   }
 
   private getSectionTypeName(type: number): string {

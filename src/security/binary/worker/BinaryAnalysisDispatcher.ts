@@ -3,11 +3,8 @@ import canonicalize from "canonicalize";
 import { err, ok, type Result } from "../../../domain/result.js";
 import { InstructionDecoder } from "../cfg/InstructionDecoder.js";
 import { ControlFlowGraphBuilder } from "../cfg/ControlFlowGraphBuilder.js";
-import { FunctionRecoveryEngine, type SymbolEntry } from "../cfg/FunctionRecoveryEngine.js";
-import type {
-  Architecture,
-  Instruction,
-} from "../cfg/types.js";
+import { FunctionRecoveryEngine } from "../cfg/FunctionRecoveryEngine.js";
+import type { Architecture, Instruction } from "../cfg/types.js";
 import type {
   BinaryWorkerAnalyzeRequest,
   RawAnalysisResultPayload,
@@ -109,7 +106,9 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
           payload = { decoder: decodeRes.value.payload };
           completeness = decodeRes.value.completeness;
           executionStatus = decodeRes.value.completeness.outcome;
-          diagnostics.push(`Decoded ${decodeRes.value.payload.instructions.length} instructions`);
+          diagnostics.push(
+            `Decoded ${decodeRes.value.payload.instructions.length} instructions`,
+          );
           break;
         }
 
@@ -120,7 +119,9 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
           }
           payload = { cfg: cfgRes.value.payload };
           completeness = cfgRes.value.completeness;
-          executionStatus = cfgRes.value.payload.isComplete ? "SUCCESS" : "PARTIAL";
+          executionStatus = cfgRes.value.payload.isComplete
+            ? "SUCCESS"
+            : "PARTIAL";
           diagnostics.push(
             `Constructed CFG with ${cfgRes.value.payload.blocks.length} blocks, ${cfgRes.value.payload.edges.length} edges`,
           );
@@ -132,35 +133,60 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
           payload = { reachability: reachRes.payload };
           completeness = reachRes.completeness;
           executionStatus = "SUCCESS";
-          diagnostics.push(`Reachability analysis finished: status=${reachRes.payload.status}`);
+          diagnostics.push(
+            `Reachability analysis finished: status=${reachRes.payload.status}`,
+          );
           break;
         }
 
         case "TAINT": {
-          const taintRes = this.runTaint(request);
+          const decodeRes = this.runDecoder(request, binaryBytes);
+          const decComp = decodeRes.ok
+            ? decodeRes.value.completeness
+            : undefined;
+          const taintRes = this.runTaint(request, decComp, binaryBytes.length);
           payload = { taint: taintRes.payload };
           completeness = taintRes.completeness;
           executionStatus = "SUCCESS";
-          diagnostics.push(`Taint propagation finished: status=${taintRes.payload.status}`);
+          diagnostics.push(
+            `Taint propagation stage=${taintRes.payload.stageStatus ?? taintRes.payload.status}`,
+          );
           break;
         }
 
         case "WITNESS": {
-          const witnessRes = this.runWitness(request);
+          const decodeRes = this.runDecoder(request, binaryBytes);
+          const decComp = decodeRes.ok
+            ? decodeRes.value.completeness
+            : undefined;
+          const witnessRes = this.runWitness(
+            request,
+            decComp,
+            binaryBytes.length,
+          );
           payload = { witness: witnessRes.payload };
           completeness = witnessRes.completeness;
           executionStatus = "SUCCESS";
-          diagnostics.push(`Witness synthesis finished: exploitability=${witnessRes.payload.exploitabilityStatus}`);
+          diagnostics.push(
+            `Witness synthesis stage=${witnessRes.payload.stageStatus ?? witnessRes.payload.exploitabilityStatus}`,
+          );
           break;
         }
 
         case "ALL": {
           const metaRes = this.parseElfMetadata(binaryBytes, request);
           const decodeRes = this.runDecoder(request, binaryBytes);
+          const decComp = decodeRes.ok
+            ? decodeRes.value.completeness
+            : undefined;
           const cfgRes = this.runCfg(request, binaryBytes);
           const reachRes = this.runReachability(request, binaryBytes);
-          const taintRes = this.runTaint(request);
-          const witnessRes = this.runWitness(request);
+          const taintRes = this.runTaint(request, decComp, binaryBytes.length);
+          const witnessRes = this.runWitness(
+            request,
+            decComp,
+            binaryBytes.length,
+          );
 
           payload = {
             metadata: metaRes.ok ? metaRes.value : undefined,
@@ -170,21 +196,21 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
             taint: taintRes.payload,
             witness: witnessRes.payload,
           };
-          const isFullyComplete =
+
+          // Preserve decoder & CFG completeness without overwriting!
+          const isDecodeAndCfgComplete =
             metaRes.ok &&
             decodeRes.ok &&
             decodeRes.value.completeness.isComplete &&
             cfgRes.ok &&
             cfgRes.value.completeness.isComplete &&
-            reachRes.completeness.isComplete &&
-            taintRes.completeness.isComplete &&
-            witnessRes.completeness.isComplete;
+            cfgRes.value.payload.isComplete;
 
           completeness = decodeRes.ok
             ? {
                 ...decodeRes.value.completeness,
-                isComplete: isFullyComplete,
-                outcome: isFullyComplete ? "SUCCESS" : "PARTIAL",
+                isComplete: isDecodeAndCfgComplete,
+                outcome: isDecodeAndCfgComplete ? "SUCCESS" : "PARTIAL",
               }
             : {
                 isComplete: false,
@@ -192,9 +218,15 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
                 decodedBytes: 0,
                 totalBytes: binaryBytes.length,
               };
-          completeness = decodeRes.ok ? decodeRes.value.completeness : { isComplete: false, outcome: "FAILED", decodedBytes: 0, totalBytes: binaryBytes.length };
-          executionStatus = decodeRes.ok && cfgRes.ok ? "SUCCESS" : "PARTIAL";
-          diagnostics.push("Comprehensive stage analysis pipeline completed without fabricated proofs");
+
+          executionStatus = isDecodeAndCfgComplete
+            ? "SUCCESS"
+            : decodeRes.ok
+              ? "PARTIAL"
+              : "FAILED";
+          diagnostics.push(
+            "Comprehensive stage analysis pipeline completed without fabricated proofs",
+          );
           break;
         }
 
@@ -221,7 +253,9 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
 
     // Canonicalize payload to compute deterministic SHA-256 digest
     const canonicalJson = canonicalize(payload) ?? "{}";
-    const resultDigest = createHash("sha256").update(canonicalJson).digest("hex");
+    const resultDigest = createHash("sha256")
+      .update(canonicalJson)
+      .digest("hex");
 
     return ok({
       executionStatus,
@@ -235,8 +269,13 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
   private runDecoder(
     request: BinaryWorkerAnalyzeRequest,
     binaryBytes: Buffer,
-  ): Result<{ payload: RawDecoderPayload; completeness: RawDecoderCompleteness }, DispatchError> {
-    const arch = this.mapArchitecture(request.analysisConfiguration.architecture);
+  ): Result<
+    { payload: RawDecoderPayload; completeness: RawDecoderCompleteness },
+    DispatchError
+  > {
+    const arch = this.mapArchitecture(
+      request.analysisConfiguration.architecture,
+    );
     let bytesToDecode: Uint8Array = new Uint8Array(binaryBytes);
     let entryAddress = 0;
     const archStr = request.analysisConfiguration.architecture;
@@ -255,10 +294,15 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
     ) {
       const is64 = binaryBytes[4] === 2;
       const isLE = binaryBytes[5] === 1;
-      isLittleEndian = archStr === "MIPS_LE" ? true : archStr === "MIPS_BE" ? false : isLE;
+      isLittleEndian =
+        archStr === "MIPS_LE" ? true : archStr === "MIPS_BE" ? false : isLE;
 
       const e_entry = is64
-        ? Number(isLE ? binaryBytes.readBigUInt64LE(24) : binaryBytes.readBigUInt64BE(24))
+        ? Number(
+            isLE
+              ? binaryBytes.readBigUInt64LE(24)
+              : binaryBytes.readBigUInt64BE(24),
+          )
         : isLE
           ? binaryBytes.readUInt32LE(24)
           : binaryBytes.readUInt32BE(24);
@@ -266,20 +310,33 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
 
       const e_flags = is64
         ? 0
-        : (isLE ? binaryBytes.readUInt32LE(36) : binaryBytes.readUInt32BE(36));
+        : isLE
+          ? binaryBytes.readUInt32LE(36)
+          : binaryBytes.readUInt32BE(36);
       const hasMips16Ase = (e_flags & 0x04000000) !== 0;
       isMips16 = hasMips16Ase || (entryAddress & 1) === 1;
 
       const e_shoff = is64
-        ? Number(isLE ? binaryBytes.readBigUInt64LE(40) : binaryBytes.readBigUInt64BE(40))
+        ? Number(
+            isLE
+              ? binaryBytes.readBigUInt64LE(40)
+              : binaryBytes.readBigUInt64BE(40),
+          )
         : isLE
           ? binaryBytes.readUInt32LE(32)
           : binaryBytes.readUInt32BE(32);
-      const e_shentsize = isLE ? binaryBytes.readUInt16LE(is64 ? 58 : 46) : binaryBytes.readUInt16BE(is64 ? 58 : 46);
-      const e_shnum = isLE ? binaryBytes.readUInt16LE(is64 ? 60 : 48) : binaryBytes.readUInt16BE(is64 ? 60 : 48);
-      const e_shstrndx = isLE ? binaryBytes.readUInt16LE(is64 ? 62 : 50) : binaryBytes.readUInt16BE(is64 ? 62 : 50);
+      const e_shentsize = isLE
+        ? binaryBytes.readUInt16LE(is64 ? 58 : 46)
+        : binaryBytes.readUInt16BE(is64 ? 58 : 46);
+      const e_shnum = isLE
+        ? binaryBytes.readUInt16LE(is64 ? 60 : 48)
+        : binaryBytes.readUInt16BE(is64 ? 60 : 48);
+      const e_shstrndx = isLE
+        ? binaryBytes.readUInt16LE(is64 ? 62 : 50)
+        : binaryBytes.readUInt16BE(is64 ? 62 : 50);
 
-      let selectedSec: { offset: number; size: number; addr: number } | null = null;
+      let selectedSec: { offset: number; size: number; addr: number } | null =
+        null;
 
       if (e_shoff > 0 && e_shnum > 0) {
         // Read string table for section names if available
@@ -288,17 +345,31 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
           const strSecOff = e_shoff + e_shstrndx * e_shentsize;
           if (strSecOff + e_shentsize <= binaryBytes.length) {
             const strTabOffset = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(strSecOff + 24) : binaryBytes.readBigUInt64BE(strSecOff + 24))
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(strSecOff + 24)
+                    : binaryBytes.readBigUInt64BE(strSecOff + 24),
+                )
               : isLE
                 ? binaryBytes.readUInt32LE(strSecOff + 16)
                 : binaryBytes.readUInt32BE(strSecOff + 16);
             const strTabSize = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(strSecOff + 32) : binaryBytes.readBigUInt64BE(strSecOff + 32))
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(strSecOff + 32)
+                    : binaryBytes.readBigUInt64BE(strSecOff + 32),
+                )
               : isLE
                 ? binaryBytes.readUInt32LE(strSecOff + 20)
                 : binaryBytes.readUInt32BE(strSecOff + 20);
-            if (strTabOffset > 0 && strTabOffset + strTabSize <= binaryBytes.length) {
-              strTab = binaryBytes.subarray(strTabOffset, strTabOffset + strTabSize);
+            if (
+              strTabOffset > 0 &&
+              strTabOffset + strTabSize <= binaryBytes.length
+            ) {
+              strTab = binaryBytes.subarray(
+                strTabOffset,
+                strTabOffset + strTabSize,
+              );
             }
           }
         }
@@ -307,24 +378,42 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
           const secOff = e_shoff + i * e_shentsize;
           if (secOff + e_shentsize > binaryBytes.length) break;
 
-          const sh_name = isLE ? binaryBytes.readUInt32LE(secOff) : binaryBytes.readUInt32BE(secOff);
+          const sh_name = isLE
+            ? binaryBytes.readUInt32LE(secOff)
+            : binaryBytes.readUInt32BE(secOff);
           const sh_flags = is64
-            ? Number(isLE ? binaryBytes.readBigUInt64LE(secOff + 8) : binaryBytes.readBigUInt64BE(secOff + 8))
+            ? Number(
+                isLE
+                  ? binaryBytes.readBigUInt64LE(secOff + 8)
+                  : binaryBytes.readBigUInt64BE(secOff + 8),
+              )
             : isLE
               ? binaryBytes.readUInt32LE(secOff + 8)
               : binaryBytes.readUInt32BE(secOff + 8);
           const sh_addr = is64
-            ? Number(isLE ? binaryBytes.readBigUInt64LE(secOff + 16) : binaryBytes.readBigUInt64BE(secOff + 16))
+            ? Number(
+                isLE
+                  ? binaryBytes.readBigUInt64LE(secOff + 16)
+                  : binaryBytes.readBigUInt64BE(secOff + 16),
+              )
             : isLE
               ? binaryBytes.readUInt32LE(secOff + 12)
               : binaryBytes.readUInt32BE(secOff + 12);
           const sh_offset = is64
-            ? Number(isLE ? binaryBytes.readBigUInt64LE(secOff + 24) : binaryBytes.readBigUInt64BE(secOff + 24))
+            ? Number(
+                isLE
+                  ? binaryBytes.readBigUInt64LE(secOff + 24)
+                  : binaryBytes.readBigUInt64BE(secOff + 24),
+              )
             : isLE
               ? binaryBytes.readUInt32LE(secOff + 16)
               : binaryBytes.readUInt32BE(secOff + 16);
           const sh_size = is64
-            ? Number(isLE ? binaryBytes.readBigUInt64LE(secOff + 32) : binaryBytes.readBigUInt64BE(secOff + 32))
+            ? Number(
+                isLE
+                  ? binaryBytes.readBigUInt64LE(secOff + 32)
+                  : binaryBytes.readBigUInt64BE(secOff + 32),
+              )
             : isLE
               ? binaryBytes.readUInt32LE(secOff + 20)
               : binaryBytes.readUInt32BE(secOff + 20);
@@ -351,24 +440,53 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
         for (let i = 0; i < e_shnum; i++) {
           const secOff = e_shoff + i * e_shentsize;
           if (secOff + e_shentsize > binaryBytes.length) break;
-          const sh_type = isLE ? binaryBytes.readUInt32LE(secOff + 4) : binaryBytes.readUInt32BE(secOff + 4);
-          if (sh_type === 2 /* SHT_SYMTAB */ || sh_type === 11 /* SHT_DYNSYM */) {
+          const sh_type = isLE
+            ? binaryBytes.readUInt32LE(secOff + 4)
+            : binaryBytes.readUInt32BE(secOff + 4);
+          if (
+            sh_type === 2 /* SHT_SYMTAB */ ||
+            sh_type === 11 /* SHT_DYNSYM */
+          ) {
             const symOff = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(secOff + 24) : binaryBytes.readBigUInt64BE(secOff + 24))
-              : (isLE ? binaryBytes.readUInt32LE(secOff + 16) : binaryBytes.readUInt32BE(secOff + 16));
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(secOff + 24)
+                    : binaryBytes.readBigUInt64BE(secOff + 24),
+                )
+              : isLE
+                ? binaryBytes.readUInt32LE(secOff + 16)
+                : binaryBytes.readUInt32BE(secOff + 16);
             const symSize = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(secOff + 32) : binaryBytes.readBigUInt64BE(secOff + 32))
-              : (isLE ? binaryBytes.readUInt32LE(secOff + 20) : binaryBytes.readUInt32BE(secOff + 20));
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(secOff + 32)
+                    : binaryBytes.readBigUInt64BE(secOff + 32),
+                )
+              : isLE
+                ? binaryBytes.readUInt32LE(secOff + 20)
+                : binaryBytes.readUInt32BE(secOff + 20);
             const symEntSize = is64 ? 24 : 16;
 
             if (symOff > 0 && symOff + symSize <= binaryBytes.length) {
               for (let s = 0; s + symEntSize <= symSize; s += symEntSize) {
                 const st_value = is64
-                  ? Number(isLE ? binaryBytes.readBigUInt64LE(symOff + s + 8) : binaryBytes.readBigUInt64BE(symOff + s + 8))
-                  : (isLE ? binaryBytes.readUInt32LE(symOff + s + 4) : binaryBytes.readUInt32BE(symOff + s + 4));
+                  ? Number(
+                      isLE
+                        ? binaryBytes.readBigUInt64LE(symOff + s + 8)
+                        : binaryBytes.readBigUInt64BE(symOff + s + 8),
+                    )
+                  : isLE
+                    ? binaryBytes.readUInt32LE(symOff + s + 4)
+                    : binaryBytes.readUInt32BE(symOff + s + 4);
                 const st_size = is64
-                  ? Number(isLE ? binaryBytes.readBigUInt64LE(symOff + s + 16) : binaryBytes.readBigUInt64BE(symOff + s + 16))
-                  : (isLE ? binaryBytes.readUInt32LE(symOff + s + 8) : binaryBytes.readUInt32BE(symOff + s + 8));
+                  ? Number(
+                      isLE
+                        ? binaryBytes.readBigUInt64LE(symOff + s + 16)
+                        : binaryBytes.readBigUInt64BE(symOff + s + 16),
+                    )
+                  : isLE
+                    ? binaryBytes.readUInt32LE(symOff + s + 8)
+                    : binaryBytes.readUInt32BE(symOff + s + 8);
 
                 if (st_value > 0 && (st_value & 1) === 1 && st_size > 0) {
                   mips16Regions.push({
@@ -386,17 +504,33 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
           const sec1Off = e_shoff + e_shentsize;
           if (sec1Off + e_shentsize <= binaryBytes.length) {
             const sh_offset = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(sec1Off + 24) : binaryBytes.readBigUInt64BE(sec1Off + 24))
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(sec1Off + 24)
+                    : binaryBytes.readBigUInt64BE(sec1Off + 24),
+                )
               : isLE
                 ? binaryBytes.readUInt32LE(sec1Off + 16)
                 : binaryBytes.readUInt32BE(sec1Off + 16);
             const sh_size = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(sec1Off + 32) : binaryBytes.readBigUInt64BE(sec1Off + 32))
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(sec1Off + 32)
+                    : binaryBytes.readBigUInt64BE(sec1Off + 32),
+                )
               : isLE
                 ? binaryBytes.readUInt32LE(sec1Off + 20)
                 : binaryBytes.readUInt32BE(sec1Off + 20);
-            if (sh_offset > 0 && sh_size > 0 && sh_offset + sh_size <= binaryBytes.length) {
-              selectedSec = { offset: sh_offset, size: sh_size, addr: entryAddress };
+            if (
+              sh_offset > 0 &&
+              sh_size > 0 &&
+              sh_offset + sh_size <= binaryBytes.length
+            ) {
+              selectedSec = {
+                offset: sh_offset,
+                size: sh_size,
+                addr: entryAddress,
+              };
             }
           }
         }
@@ -405,33 +539,69 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
       // If section headers are absent (stripped ELF) or not found, inspect Program Headers (PT_LOAD with PF_X)
       if (!selectedSec) {
         const e_phoff = is64
-          ? Number(isLE ? binaryBytes.readBigUInt64LE(32) : binaryBytes.readBigUInt64BE(32))
+          ? Number(
+              isLE
+                ? binaryBytes.readBigUInt64LE(32)
+                : binaryBytes.readBigUInt64BE(32),
+            )
           : isLE
             ? binaryBytes.readUInt32LE(28)
             : binaryBytes.readUInt32BE(28);
-        const e_phentsize = isLE ? binaryBytes.readUInt16LE(is64 ? 54 : 42) : binaryBytes.readUInt16BE(is64 ? 54 : 42);
-        const e_phnum = isLE ? binaryBytes.readUInt16LE(is64 ? 56 : 44) : binaryBytes.readUInt16BE(is64 ? 56 : 44);
+        const e_phentsize = isLE
+          ? binaryBytes.readUInt16LE(is64 ? 54 : 42)
+          : binaryBytes.readUInt16BE(is64 ? 54 : 42);
+        const e_phnum = isLE
+          ? binaryBytes.readUInt16LE(is64 ? 56 : 44)
+          : binaryBytes.readUInt16BE(is64 ? 56 : 44);
 
         if (e_phoff > 0 && e_phnum > 0) {
-          let execSeg: { p_offset: number; p_vaddr: number; p_filesz: number } | null = null;
+          let execSeg: {
+            p_offset: number;
+            p_vaddr: number;
+            p_filesz: number;
+          } | null = null;
           let dynSeg: { p_offset: number; p_filesz: number } | null = null;
 
           for (let i = 0; i < e_phnum; i++) {
             const off = e_phoff + i * e_phentsize;
             if (off + e_phentsize > binaryBytes.length) break;
-            const p_type = isLE ? binaryBytes.readUInt32LE(off) : binaryBytes.readUInt32BE(off);
+            const p_type = isLE
+              ? binaryBytes.readUInt32LE(off)
+              : binaryBytes.readUInt32BE(off);
             const p_offset = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(off + 8) : binaryBytes.readBigUInt64BE(off + 8))
-              : (isLE ? binaryBytes.readUInt32LE(off + 4) : binaryBytes.readUInt32BE(off + 4));
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(off + 8)
+                    : binaryBytes.readBigUInt64BE(off + 8),
+                )
+              : isLE
+                ? binaryBytes.readUInt32LE(off + 4)
+                : binaryBytes.readUInt32BE(off + 4);
             const p_vaddr = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(off + 16) : binaryBytes.readBigUInt64BE(off + 16))
-              : (isLE ? binaryBytes.readUInt32LE(off + 8) : binaryBytes.readUInt32BE(off + 8));
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(off + 16)
+                    : binaryBytes.readBigUInt64BE(off + 16),
+                )
+              : isLE
+                ? binaryBytes.readUInt32LE(off + 8)
+                : binaryBytes.readUInt32BE(off + 8);
             const p_filesz = is64
-              ? Number(isLE ? binaryBytes.readBigUInt64LE(off + 32) : binaryBytes.readBigUInt64BE(off + 32))
-              : (isLE ? binaryBytes.readUInt32LE(off + 16) : binaryBytes.readUInt32BE(off + 16));
+              ? Number(
+                  isLE
+                    ? binaryBytes.readBigUInt64LE(off + 32)
+                    : binaryBytes.readBigUInt64BE(off + 32),
+                )
+              : isLE
+                ? binaryBytes.readUInt32LE(off + 16)
+                : binaryBytes.readUInt32BE(off + 16);
             const p_flags = is64
-              ? (isLE ? binaryBytes.readUInt32LE(off + 4) : binaryBytes.readUInt32BE(off + 4))
-              : (isLE ? binaryBytes.readUInt32LE(off + 24) : binaryBytes.readUInt32BE(off + 24));
+              ? isLE
+                ? binaryBytes.readUInt32LE(off + 4)
+                : binaryBytes.readUInt32BE(off + 4)
+              : isLE
+                ? binaryBytes.readUInt32LE(off + 24)
+                : binaryBytes.readUInt32BE(off + 24);
 
             if (p_type === 1 /* PT_LOAD */ && (p_flags & 1) !== 0) {
               execSeg = { p_offset, p_vaddr, p_filesz };
@@ -449,35 +619,74 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
             let dt_hash = 0;
             if (dynSeg) {
               const entrySize = is64 ? 16 : 8;
-              for (let d = 0; d + entrySize <= dynSeg.p_filesz; d += entrySize) {
+              for (
+                let d = 0;
+                d + entrySize <= dynSeg.p_filesz;
+                d += entrySize
+              ) {
                 const tag = is64
-                  ? Number(isLE ? binaryBytes.readBigUInt64LE(dynSeg.p_offset + d) : binaryBytes.readBigUInt64BE(dynSeg.p_offset + d))
-                  : (isLE ? binaryBytes.readUInt32LE(dynSeg.p_offset + d) : binaryBytes.readUInt32BE(dynSeg.p_offset + d));
+                  ? Number(
+                      isLE
+                        ? binaryBytes.readBigUInt64LE(dynSeg.p_offset + d)
+                        : binaryBytes.readBigUInt64BE(dynSeg.p_offset + d),
+                    )
+                  : isLE
+                    ? binaryBytes.readUInt32LE(dynSeg.p_offset + d)
+                    : binaryBytes.readUInt32BE(dynSeg.p_offset + d);
                 const val = is64
-                  ? Number(isLE ? binaryBytes.readBigUInt64LE(dynSeg.p_offset + d + 8) : binaryBytes.readBigUInt64BE(dynSeg.p_offset + d + 8))
-                  : (isLE ? binaryBytes.readUInt32LE(dynSeg.p_offset + d + 4) : binaryBytes.readUInt32BE(dynSeg.p_offset + d + 4));
+                  ? Number(
+                      isLE
+                        ? binaryBytes.readBigUInt64LE(dynSeg.p_offset + d + 8)
+                        : binaryBytes.readBigUInt64BE(dynSeg.p_offset + d + 8),
+                    )
+                  : isLE
+                    ? binaryBytes.readUInt32LE(dynSeg.p_offset + d + 4)
+                    : binaryBytes.readUInt32BE(dynSeg.p_offset + d + 4);
                 if (tag === 0x0c /* DT_INIT */) dt_init = val;
                 else if (tag === 0x06 /* DT_SYMTAB */) dt_symtab = val;
                 else if (tag === 0x05 /* DT_STRTAB */) dt_strtab = val;
-                else if (tag === 0x70000011 /* DT_MIPS_SYMTABNO */) dt_mips_symtabno = val;
+                else if (tag === 0x70000011 /* DT_MIPS_SYMTABNO */)
+                  dt_mips_symtabno = val;
                 else if (tag === 0x04 /* DT_HASH */) dt_hash = val;
               }
 
-              if (mips16Regions.length === 0 && dt_symtab > 0 && dt_strtab > 0) {
+              if (
+                mips16Regions.length === 0 &&
+                dt_symtab > 0 &&
+                dt_strtab > 0
+              ) {
                 let symCount = dt_mips_symtabno;
-                if (symCount === 0 && dt_hash > 0 && dt_hash + 8 <= binaryBytes.length) {
-                  symCount = isLE ? binaryBytes.readUInt32LE(dt_hash + 4) : binaryBytes.readUInt32BE(dt_hash + 4);
+                if (
+                  symCount === 0 &&
+                  dt_hash > 0 &&
+                  dt_hash + 8 <= binaryBytes.length
+                ) {
+                  symCount = isLE
+                    ? binaryBytes.readUInt32LE(dt_hash + 4)
+                    : binaryBytes.readUInt32BE(dt_hash + 4);
                 }
                 const symEntSize = is64 ? 24 : 16;
                 for (let s = 0; s < symCount; s++) {
                   const s_off = dt_symtab + s * symEntSize;
                   if (s_off + symEntSize > binaryBytes.length) break;
                   const st_value = is64
-                    ? Number(isLE ? binaryBytes.readBigUInt64LE(s_off + 8) : binaryBytes.readBigUInt64BE(s_off + 8))
-                    : (isLE ? binaryBytes.readUInt32LE(s_off + 4) : binaryBytes.readUInt32BE(s_off + 4));
+                    ? Number(
+                        isLE
+                          ? binaryBytes.readBigUInt64LE(s_off + 8)
+                          : binaryBytes.readBigUInt64BE(s_off + 8),
+                      )
+                    : isLE
+                      ? binaryBytes.readUInt32LE(s_off + 4)
+                      : binaryBytes.readUInt32BE(s_off + 4);
                   const st_size = is64
-                    ? Number(isLE ? binaryBytes.readBigUInt64LE(s_off + 16) : binaryBytes.readBigUInt64BE(s_off + 16))
-                    : (isLE ? binaryBytes.readUInt32LE(s_off + 8) : binaryBytes.readUInt32BE(s_off + 8));
+                    ? Number(
+                        isLE
+                          ? binaryBytes.readBigUInt64LE(s_off + 16)
+                          : binaryBytes.readBigUInt64BE(s_off + 16),
+                      )
+                    : isLE
+                      ? binaryBytes.readUInt32LE(s_off + 8)
+                      : binaryBytes.readUInt32BE(s_off + 8);
 
                   if (st_value > 0 && (st_value & 1) === 1 && st_size > 0) {
                     mips16Regions.push({
@@ -498,19 +707,42 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
               codeStartVaddr = entryAddress;
             }
 
-            if (codeStartVaddr >= execSeg.p_vaddr && codeStartVaddr < execSeg.p_vaddr + execSeg.p_filesz) {
-              const codeOffset = execSeg.p_offset + (codeStartVaddr - execSeg.p_vaddr);
-              const codeSize = execSeg.p_filesz - (codeStartVaddr - execSeg.p_vaddr);
-              selectedSec = { offset: codeOffset, size: codeSize, addr: codeStartVaddr };
+            if (
+              codeStartVaddr >= execSeg.p_vaddr &&
+              codeStartVaddr < execSeg.p_vaddr + execSeg.p_filesz
+            ) {
+              const codeOffset =
+                execSeg.p_offset + (codeStartVaddr - execSeg.p_vaddr);
+              const codeSize =
+                execSeg.p_filesz - (codeStartVaddr - execSeg.p_vaddr);
+              selectedSec = {
+                offset: codeOffset,
+                size: codeSize,
+                addr: codeStartVaddr,
+              };
             } else {
-              selectedSec = { offset: execSeg.p_offset, size: execSeg.p_filesz, addr: execSeg.p_vaddr };
+              selectedSec = {
+                offset: execSeg.p_offset,
+                size: execSeg.p_filesz,
+                addr: execSeg.p_vaddr,
+              };
             }
           }
         }
       }
 
-      if (selectedSec && selectedSec.offset >= 0 && selectedSec.size > 0 && selectedSec.offset + selectedSec.size <= binaryBytes.length) {
-        bytesToDecode = new Uint8Array(binaryBytes.subarray(selectedSec.offset, selectedSec.offset + selectedSec.size));
+      if (
+        selectedSec &&
+        selectedSec.offset >= 0 &&
+        selectedSec.size > 0 &&
+        selectedSec.offset + selectedSec.size <= binaryBytes.length
+      ) {
+        bytesToDecode = new Uint8Array(
+          binaryBytes.subarray(
+            selectedSec.offset,
+            selectedSec.offset + selectedSec.size,
+          ),
+        );
         if (selectedSec.addr >= 0) {
           entryAddress = selectedSec.addr;
         }
@@ -520,21 +752,17 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
     const maxInstructions = request.analysisConfiguration.maxInstructions;
     const isThumb = archStr === "Thumb";
 
-    const decodeRes = this.decoder.decodeSafe(
-      bytesToDecode,
-      entryAddress,
-      {
-        architecture: arch,
-        isLittleEndian,
-        isThumb,
-        isMips16,
-        mips16Regions: mips16Regions.length > 0 ? mips16Regions : undefined,
-        preferredProvider:
-          isMips16 || mips16Regions.length > 0
-            ? "InProcessInstructionDecoder"
-            : "CapstoneDecoderProvider",
-      },
-    );
+    const decodeRes = this.decoder.decodeSafe(bytesToDecode, entryAddress, {
+      architecture: arch,
+      isLittleEndian,
+      isThumb,
+      isMips16,
+      mips16Regions: mips16Regions.length > 0 ? mips16Regions : undefined,
+      preferredProvider:
+        isMips16 || mips16Regions.length > 0
+          ? "InProcessInstructionDecoder"
+          : "CapstoneDecoderProvider",
+    });
 
     if (!decodeRes.ok) {
       return err({
@@ -544,21 +772,33 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
     }
 
     const decoded = decodeRes.value;
-    const instructions = (decoded.instructions || []).slice(0, maxInstructions).map((inst) => ({
-      address: inst.address,
-      mnemonic: inst.mnemonic,
-      operands: inst.operands ?? "",
-      size: inst.size > 0 ? inst.size : 4,
-      rawBytesHex: inst.rawBytes
-        ? Buffer.from(inst.rawBytes).toString("hex")
-        : (inst as any).rawBytesHex ?? "",
-      isBranch: inst.isBranch ?? false,
-      isConditional: inst.isConditional ?? false,
-      isCall: inst.isCall ?? false,
-      isReturn: inst.isReturn ?? false,
-      isIndirect: (inst as any).isIndirect ?? false,
-      targetAddress: typeof (inst as any).targetAddress === "number" ? (inst as any).targetAddress : null,
-    }));
+    const instructions = (decoded.instructions || [])
+      .slice(0, maxInstructions)
+      .map((inst) => {
+        const rawBuf = inst.rawBytes
+          ? Buffer.from(inst.rawBytes).subarray(0, 64)
+          : Buffer.from((inst as any).rawBytesHex ?? "", "hex").subarray(0, 64);
+        const boundedSize =
+          rawBuf.length > 0
+            ? rawBuf.length
+            : Math.min(64, inst.size > 0 ? inst.size : 4);
+        return {
+          address: inst.address,
+          mnemonic: inst.mnemonic,
+          operands: inst.operands ?? "",
+          size: boundedSize,
+          rawBytesHex: rawBuf.toString("hex"),
+          isBranch: inst.isBranch ?? false,
+          isConditional: inst.isConditional ?? false,
+          isCall: inst.isCall ?? false,
+          isReturn: inst.isReturn ?? false,
+          isIndirect: (inst as any).isIndirect ?? false,
+          targetAddress:
+            typeof (inst as any).targetAddress === "number"
+              ? (inst as any).targetAddress
+              : null,
+        };
+      });
 
     const outcome: "SUCCESS" | "PARTIAL" | "FAILED" =
       decoded.outcome === "SUCCESS"
@@ -574,7 +814,8 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
       totalBytes: bytesToDecode.byteLength,
       decodedBytes: decoded.decodedBytes ?? bytesToDecode.byteLength,
       instructions,
-      provider: decoded.provenance?.actualProvider ?? "InProcessInstructionDecoder",
+      provider:
+        decoded.provenance?.actualProvider ?? "InProcessInstructionDecoder",
       unhandledByteOffset: decoded.unhandledByteOffset,
       haltReason: decoded.haltReason,
     };
@@ -594,7 +835,10 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
   private runCfg(
     request: BinaryWorkerAnalyzeRequest,
     binaryBytes: Buffer,
-  ): Result<{ payload: RawCfgPayload; completeness: RawDecoderCompleteness }, DispatchError> {
+  ): Result<
+    { payload: RawCfgPayload; completeness: RawDecoderCompleteness },
+    DispatchError
+  > {
     const decodeRes = this.runDecoder(request, binaryBytes);
     if (!decodeRes.ok) {
       return err(decodeRes.error);
@@ -602,22 +846,27 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
 
     const entryAddress = decodeRes.value.payload.baseAddress;
     const functionName = request.analysisConfiguration.entryPoints[0] || "main";
-    const arch = this.mapArchitecture(request.analysisConfiguration.architecture);
+    const arch = this.mapArchitecture(
+      request.analysisConfiguration.architecture,
+    );
 
     const cfg = this.cfgBuilder.buildFunctionCfg(
-      decodeRes.value.payload.instructions.map((i: RawInstruction) => ({
-        address: i.address,
-        mnemonic: i.mnemonic,
-        operands: i.operands,
-        size: i.size,
-        rawBytes: new Uint8Array(Buffer.from(i.rawBytesHex, "hex")),
-        isBranch: i.isBranch,
-        isConditional: i.isConditional,
-        isCall: i.isCall,
-        isReturn: i.isReturn,
-        isIndirect: i.isIndirect,
-        targetAddress: i.targetAddress ?? undefined,
-      } as Instruction)),
+      decodeRes.value.payload.instructions.map(
+        (i: RawInstruction) =>
+          ({
+            address: i.address,
+            mnemonic: i.mnemonic,
+            operands: i.operands,
+            size: i.size,
+            rawBytes: new Uint8Array(Buffer.from(i.rawBytesHex, "hex")),
+            isBranch: i.isBranch,
+            isConditional: i.isConditional,
+            isCall: i.isCall,
+            isReturn: i.isReturn,
+            isIndirect: i.isIndirect,
+            targetAddress: i.targetAddress ?? undefined,
+          }) as Instruction,
+      ),
       {
         functionName,
         entryAddress,
@@ -625,25 +874,28 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
       },
     );
 
-    const rawBlocks: RawBasicBlock[] = Array.from(cfg.blocks.values()).map((b) => {
-      let terminator: RawBasicBlock["terminatorType"] = "fallthrough";
-      if (b.terminatorType === "conditional_branch") terminator = "conditional_branch";
-      else if (b.terminatorType === "branch") terminator = "branch";
-      else if (b.terminatorType === "call") terminator = "call";
-      else if (b.terminatorType === "return") terminator = "return";
-      else if (b.terminatorType === "halt") terminator = "halt";
+    const rawBlocks: RawBasicBlock[] = Array.from(cfg.blocks.values()).map(
+      (b) => {
+        let terminator: RawBasicBlock["terminatorType"] = "fallthrough";
+        if (b.terminatorType === "conditional_branch")
+          terminator = "conditional_branch";
+        else if (b.terminatorType === "branch") terminator = "branch";
+        else if (b.terminatorType === "call") terminator = "call";
+        else if (b.terminatorType === "return") terminator = "return";
+        else if (b.terminatorType === "halt") terminator = "halt";
 
-      return {
-        id: b.id,
-        startAddress: b.startAddress,
-        endAddress: b.endAddress,
-        functionName: b.functionName,
-        instructionsCount: b.instructions.length,
-        predecessorIds: [...b.predecessorIds],
-        successorIds: [...b.successorIds],
-        terminatorType: terminator,
-      };
-    });
+        return {
+          id: b.id,
+          startAddress: b.startAddress,
+          endAddress: b.endAddress,
+          functionName: b.functionName,
+          instructionsCount: b.instructions.length,
+          predecessorIds: [...b.predecessorIds],
+          successorIds: [...b.successorIds],
+          terminatorType: terminator,
+        };
+      },
+    );
 
     const rawEdges: RawControlFlowEdge[] = cfg.edges.map((e) => {
       let edgeType: RawControlFlowEdge["edgeType"] = "fallthrough";
@@ -660,7 +912,10 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
 
     const entryBlockId = rawBlocks[0]?.id || "block_0";
     const cfgHash = createHash("sha256")
-      .update(canonicalize({ functionName, blocks: rawBlocks, edges: rawEdges }) ?? "{}")
+      .update(
+        canonicalize({ functionName, blocks: rawBlocks, edges: rawEdges }) ??
+          "{}",
+      )
       .digest("hex");
 
     const payload: RawCfgPayload = {
@@ -669,7 +924,8 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
       blocks: rawBlocks,
       edges: rawEdges,
       decodeOutcome: cfg.decodeOutcome || "SUCCESS",
-      isComplete: decodeRes.value.completeness.isComplete && (cfg.isComplete ?? true),
+      isComplete:
+        decodeRes.value.completeness.isComplete && (cfg.isComplete ?? true),
       cfgHash,
     };
 
@@ -692,7 +948,8 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
     ) {
       return err({
         code: "CFG_ERROR",
-        message: "Malformed or unsupported binary format: buffer is not an ELF binary",
+        message:
+          "Malformed or unsupported binary format: buffer is not an ELF binary",
       });
     }
 
@@ -723,19 +980,41 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
     }
 
     const e_entry = is64
-      ? (isLE ? binaryBytes.readBigUInt64LE(24) : binaryBytes.readBigUInt64BE(24))
-      : BigInt(isLE ? binaryBytes.readUInt32LE(24) : binaryBytes.readUInt32BE(24));
+      ? isLE
+        ? binaryBytes.readBigUInt64LE(24)
+        : binaryBytes.readBigUInt64BE(24)
+      : BigInt(
+          isLE ? binaryBytes.readUInt32LE(24) : binaryBytes.readUInt32BE(24),
+        );
     const entryPoint = `0x${e_entry.toString(16)}`;
 
     const e_phnum = is64
-      ? (binaryBytes.length >= 58 ? (isLE ? binaryBytes.readUInt16LE(56) : binaryBytes.readUInt16BE(56)) : 0)
-      : (binaryBytes.length >= 46 ? (isLE ? binaryBytes.readUInt16LE(44) : binaryBytes.readUInt16BE(44)) : 0);
+      ? binaryBytes.length >= 58
+        ? isLE
+          ? binaryBytes.readUInt16LE(56)
+          : binaryBytes.readUInt16BE(56)
+        : 0
+      : binaryBytes.length >= 46
+        ? isLE
+          ? binaryBytes.readUInt16LE(44)
+          : binaryBytes.readUInt16BE(44)
+        : 0;
 
     const e_shnum = is64
-      ? (binaryBytes.length >= 62 ? (isLE ? binaryBytes.readUInt16LE(60) : binaryBytes.readUInt16BE(60)) : 0)
-      : (binaryBytes.length >= 50 ? (isLE ? binaryBytes.readUInt16LE(48) : binaryBytes.readUInt16BE(48)) : 0);
+      ? binaryBytes.length >= 62
+        ? isLE
+          ? binaryBytes.readUInt16LE(60)
+          : binaryBytes.readUInt16BE(60)
+        : 0
+      : binaryBytes.length >= 50
+        ? isLE
+          ? binaryBytes.readUInt16LE(48)
+          : binaryBytes.readUInt16BE(48)
+        : 0;
 
-    const e_type = isLE ? binaryBytes.readUInt16LE(16) : binaryBytes.readUInt16BE(16);
+    const e_type = isLE
+      ? binaryBytes.readUInt16LE(16)
+      : binaryBytes.readUInt16BE(16);
     const isExecutable = e_type === 2 || e_type === 3 || e_entry > 0n;
 
     return ok({
@@ -756,7 +1035,8 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
     binaryBytes: Buffer,
   ): { payload: RawReachabilityPayload; completeness: RawDecoderCompleteness } {
     const entry = request.analysisConfiguration.entryPoints[0] || "main";
-    const target = request.analysisConfiguration.targetFunctions?.[0] || "system";
+    const target =
+      request.analysisConfiguration.targetFunctions?.[0] || "system";
 
     const cfgRes = this.runCfg(request, binaryBytes);
     if (!cfgRes.ok) {
@@ -785,7 +1065,11 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
     const isDecoderComplete = cfgRes.value.completeness.isComplete;
 
     const targetLower = target.toLowerCase();
-    const candidateBlocks: { blockId: string; address: number; instruction: string }[] = [];
+    const candidateBlocks: {
+      blockId: string;
+      address: number;
+      instruction: string;
+    }[] = [];
 
     const blockMap = new Map<string, (typeof cfg.blocks)[number]>();
     for (const b of cfg.blocks) {
@@ -797,10 +1081,21 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
       for (const inst of decodeRes.value.payload.instructions) {
         const mnemonic = inst.mnemonic.toLowerCase();
         const operands = inst.operands.toLowerCase();
-        const isCallOrBranch = inst.isCall || inst.isBranch || mnemonic.startsWith("bl") || mnemonic === "call" || mnemonic === "jal";
-        if (isCallOrBranch && (operands.includes(targetLower) || mnemonic.includes(targetLower))) {
+        const isCallOrBranch =
+          inst.isCall ||
+          inst.isBranch ||
+          mnemonic.startsWith("bl") ||
+          mnemonic === "call" ||
+          mnemonic === "jal";
+        if (
+          isCallOrBranch &&
+          (operands.includes(targetLower) || mnemonic.includes(targetLower))
+        ) {
           for (const b of cfg.blocks) {
-            if (inst.address >= b.startAddress && inst.address <= b.endAddress) {
+            if (
+              inst.address >= b.startAddress &&
+              inst.address <= b.endAddress
+            ) {
               candidateBlocks.push({
                 blockId: b.id,
                 address: inst.address,
@@ -933,12 +1228,25 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
 
   private runTaint(
     request: BinaryWorkerAnalyzeRequest,
+    decodeCompleteness?: RawDecoderCompleteness,
+    totalBinaryBytes = 0,
   ): { payload: RawTaintPayload; completeness: RawDecoderCompleteness } {
     const entry = request.analysisConfiguration.entryPoints[0] || "main";
-    const target = request.analysisConfiguration.targetFunctions?.[0] || "strcpy";
+    const target =
+      request.analysisConfiguration.targetSinkApi ||
+      request.analysisConfiguration.targetFunctions?.[0] ||
+      "strcpy";
+    const ruleId =
+      request.analysisConfiguration.candidateRuleId || "REA-BIN-001";
+    const category =
+      request.analysisConfiguration.candidateCategory ||
+      "unsafe_memory_operations";
 
     const payload: RawTaintPayload = {
       status: "INCONCLUSIVE",
+      stageStatus: "NOT_ATTEMPTED",
+      ruleId,
+      category,
       source: null,
       sink: {
         api: target,
@@ -950,14 +1258,17 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
       sanitizers: [],
       isSanitized: false,
       hasUnresolvedAliases: true,
-      reasoning: "Instruction-level taint propagation not yet validated; returning INCONCLUSIVE.",
+      reasoning:
+        "NOT_ATTEMPTED: Instruction-level taint propagation is not executed on binary instructions; returning fail-closed INCONCLUSIVE.",
     };
 
     const completeness: RawDecoderCompleteness = {
-      isComplete: true,
-      outcome: "SUCCESS",
-      decodedBytes: 128,
-      totalBytes: 128,
+      isComplete: false,
+      outcome: "PARTIAL",
+      decodedBytes: decodeCompleteness?.decodedBytes ?? 0,
+      totalBytes: decodeCompleteness?.totalBytes ?? totalBinaryBytes,
+      haltReason:
+        "NOT_ATTEMPTED: Instruction-level taint analysis not implemented",
     };
 
     return { payload, completeness };
@@ -965,28 +1276,45 @@ export class DefaultBinaryAnalysisDispatcher implements BinaryAnalysisStageDispa
 
   private runWitness(
     request: BinaryWorkerAnalyzeRequest,
+    decodeCompleteness?: RawDecoderCompleteness,
+    totalBinaryBytes = 0,
   ): { payload: RawWitnessPayload; completeness: RawDecoderCompleteness } {
     const findingId = `fnd_${request.taskId.replace("tsk_", "")}`;
+    const ruleId =
+      request.analysisConfiguration.candidateRuleId || "REA-BIN-001";
+    const category =
+      request.analysisConfiguration.candidateCategory ||
+      "unsafe_memory_operations";
+    const sinkApi =
+      request.analysisConfiguration.targetSinkApi ||
+      request.analysisConfiguration.targetFunctions?.[0] ||
+      "strcpy";
 
     const payload: RawWitnessPayload = {
       witnessId: `wit_${request.taskId.replace("tsk_", "")}`,
       findingId,
-      ruleId: "REA-BIN-001",
-      category: "unsafe_memory_operations",
+      ruleId,
+      category,
+      sinkApi,
+      stageStatus: "NOT_ATTEMPTED",
+      satisfiabilityStatus: "NOT_ATTEMPTED",
       isSatisfiable: false,
       isReproducible: false,
       exploitabilityStatus: "THEORETICAL",
       conflictingGuards: [],
-      validationLog: ["Witness generation inconclusive: instruction-level path constraints not validated on binary"],
+      validationLog: [
+        "NOT_ATTEMPTED: Instruction-level path constraint solving and witness generation were not executed on binary",
+      ],
       constraints: [],
       verifiedAt: new Date().toISOString(),
     };
 
     const completeness: RawDecoderCompleteness = {
-      isComplete: true,
-      outcome: "SUCCESS",
-      decodedBytes: 128,
-      totalBytes: 128,
+      isComplete: false,
+      outcome: "PARTIAL",
+      decodedBytes: decodeCompleteness?.decodedBytes ?? 0,
+      totalBytes: decodeCompleteness?.totalBytes ?? totalBinaryBytes,
+      haltReason: "NOT_ATTEMPTED: Symbolic witness synthesis not implemented",
     };
 
     return { payload, completeness };

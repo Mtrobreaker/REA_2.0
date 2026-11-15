@@ -1,6 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
-import { open, readdir, readlink, realpath, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import {
+  open,
+  readdir,
+  readFile,
+  readlink,
+  realpath,
+  stat,
+} from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { err, ok, type Result } from "../../domain/result.js";
 import type { AssessmentId } from "../../domain/security/assessment.js";
 import {
@@ -28,11 +35,23 @@ export interface BlackboardContext {
   readonly tasks: ITaskRepository;
 }
 
+export type ExtractedFileClassification =
+  | "elf_executable"
+  | "elf_shared_library"
+  | "shell_script"
+  | "configuration_file"
+  | "kernel_or_bootloader_image"
+  | "unknown_binary"
+  | "regular_file";
+
 export interface ElfMetadata {
   readonly isElf: boolean;
   readonly is64Bit?: boolean;
   readonly endianness?: "little" | "big";
   readonly architecture?: string;
+  readonly elfType?: "ET_EXEC" | "ET_DYN" | "ET_REL" | "ET_CORE" | "UNKNOWN";
+  readonly isScript?: boolean;
+  readonly isKernelOrBootloader?: boolean;
   readonly isExecutable: boolean;
 }
 
@@ -42,7 +61,9 @@ export class FirmwareInventoryService {
   /**
    * Statically inspect an executable / script header without execution.
    */
-  public static async inspectBinaryHeader(filePath: string): Promise<ElfMetadata> {
+  public static async inspectBinaryHeader(
+    filePath: string,
+  ): Promise<ElfMetadata> {
     let handle;
     try {
       handle = await open(filePath, "r");
@@ -73,7 +94,9 @@ export class FirmwareInventoryService {
 
         let architecture = "unknown";
         if (bytesRead >= 20) {
-          const machine = isLE ? buffer.readUInt16LE(18) : buffer.readUInt16BE(18);
+          const machine = isLE
+            ? buffer.readUInt16LE(18)
+            : buffer.readUInt16BE(18);
           switch (machine) {
             case 0x03:
               architecture = "x86";
@@ -101,24 +124,64 @@ export class FirmwareInventoryService {
           }
         }
 
+        let elfType: ElfMetadata["elfType"] = "UNKNOWN";
+        if (bytesRead >= 18) {
+          const eType = isLE
+            ? buffer.readUInt16LE(16)
+            : buffer.readUInt16BE(16);
+          if (eType === 1) elfType = "ET_REL";
+          else if (eType === 2) elfType = "ET_EXEC";
+          else if (eType === 3) elfType = "ET_DYN";
+          else if (eType === 4) elfType = "ET_CORE";
+        }
+
         return {
           isElf: true,
           is64Bit,
           endianness,
           architecture,
+          elfType,
+          isScript: false,
+          isKernelOrBootloader: false,
           isExecutable: true,
         };
       }
 
-      // 2. Shebang / script check (#! = 0x23 0x21)
+      // 2. U-Boot uImage magic (0x27051956), Flattened Device Tree DTB (0xd00dfeed), or ARM zImage (0x016f2818 at 36)
+      if (bytesRead >= 4) {
+        const be32 = buffer.readUInt32BE(0);
+        const zImageMagic = bytesRead >= 40 ? buffer.readUInt32LE(36) : 0;
+        if (
+          be32 === 0x27051956 ||
+          be32 === 0xd00dfeed ||
+          zImageMagic === 0x016f2818
+        ) {
+          return {
+            isElf: false,
+            isScript: false,
+            isKernelOrBootloader: true,
+            isExecutable: false,
+          };
+        }
+      }
+
+      // 3. Shebang / script check (#! = 0x23 0x21)
+      // Scripts are classified distinctly and MUST NOT enter the ELF binary_analysis queue.
       if (buffer[0] === 0x23 && buffer[1] === 0x21) {
         return {
           isElf: false,
-          isExecutable: true,
+          isScript: true,
+          isKernelOrBootloader: false,
+          isExecutable: false,
         };
       }
 
-      return { isElf: false, isExecutable: false };
+      return {
+        isElf: false,
+        isScript: false,
+        isKernelOrBootloader: false,
+        isExecutable: false,
+      };
     } catch {
       if (handle) {
         try {
@@ -149,9 +212,13 @@ export class FirmwareInventoryService {
 
     // 0. Resolve root firmware asset to preserve root firmware SHA-256 and lineage
     let rootFirmwareSha256: string = "0".repeat(64);
-    const rootAssetRes = await this.blackboard.assets.findById(assessmentId, rootFirmwareAssetId);
+    const rootAssetRes = await this.blackboard.assets.findById(
+      assessmentId,
+      rootFirmwareAssetId,
+    );
     if (rootAssetRes.ok && rootAssetRes.value) {
-      rootFirmwareSha256 = rootAssetRes.value.digest?.sha256 ?? rootFirmwareSha256;
+      rootFirmwareSha256 =
+        rootAssetRes.value.digest?.sha256 ?? rootFirmwareSha256;
     }
 
     // 1. Create partition / filesystem asset
@@ -174,12 +241,20 @@ export class FirmwareInventoryService {
       version: null,
       environment: { platform: "firmware_linux" },
       tags: ["partition", "filesystem", format],
-      metadata: { format, sandbox_root: sandboxDir, firmwareSha256: rootFirmwareSha256, rootFirmwareAssetId },
+      metadata: {
+        format,
+        sandbox_root: sandboxDir,
+        firmwareSha256: rootFirmwareSha256,
+        rootFirmwareAssetId,
+      },
       created_at: now,
     };
 
     let fsRecord: BlackboardAssetRecord;
-    const existingFs = await this.blackboard.assets.findById(assessmentId, fsAssetId);
+    const existingFs = await this.blackboard.assets.findById(
+      assessmentId,
+      fsAssetId,
+    );
     if (existingFs.ok && existingFs.value) {
       fsRecord = existingFs.value;
     } else {
@@ -195,11 +270,13 @@ export class FirmwareInventoryService {
     dirAssetMap.set(".", fsAssetId);
 
     // 2. Recursive filesystem traversal
-    const walk = async (currentDir: string): Promise<Result<void, BlackboardError>> => {
+    const walk = async (
+      currentDir: string,
+    ): Promise<Result<void, BlackboardError>> => {
       let entries;
       try {
         entries = await readdir(currentDir, { withFileTypes: true });
-      } catch (e: unknown) {
+      } catch {
         return ok(undefined); // Skip unreadable directory
       }
 
@@ -207,14 +284,48 @@ export class FirmwareInventoryService {
         const fullPath = join(currentDir, entry.name);
         const relPath = relative(sandboxDir, fullPath).replace(/\\/g, "/");
         const relDir = dirname(relPath).replace(/\\/g, "/");
-        const parentId = dirAssetMap.get(relDir === "." ? "" : relDir) ?? fsAssetId;
+        const parentId =
+          dirAssetMap.get(relDir === "." ? "" : relDir) ?? fsAssetId;
+
+        if (entry.isFile() && entry.name.endsWith(".symlink")) {
+          const headBuf = await readFile(fullPath);
+          const text = headBuf.toString("utf8");
+          if (text.startsWith("symlink:")) {
+            const linkTarget = text.slice("symlink:".length);
+            const origRelPath = relPath.slice(0, -".symlink".length);
+            const resolvedCandidate = resolve(dirname(fullPath), linkTarget);
+            const relToSandbox = relative(sandboxDir, resolvedCandidate);
+            const escapes =
+              relToSandbox.startsWith("..") ||
+              isAbsolute(relToSandbox) ||
+              isAbsolute(linkTarget);
+            const obsRes = await this.blackboard.observations.record({
+              assessment_id: assessmentId,
+              asset_id: parentId,
+              key: "firmware.symlink_entry",
+              value: {
+                path: origRelPath,
+                target: linkTarget,
+                escapes_sandbox: escapes,
+                published: false,
+              },
+              confidence: 1.0,
+              source_tool: "firmware_inventory",
+              agent_id: "firmware_inventory_service",
+              evidence_id: null,
+              created_at: Date.now(),
+            });
+            if (obsRes.ok) observationsCreated.push(obsRes.value);
+            continue;
+          }
+        }
 
         if (entry.isSymbolicLink()) {
           // Detect symlink: inspect target and ensure it does not escape sandbox
           let linkTarget: string | null = null;
           let escapes = false;
           try {
-            linkTarget = await readlink(fullPath);
+            linkTarget = (await readlink(fullPath)).replace(/\\/g, "/");
             const resolvedPath = await realpath(fullPath);
             const relToSandbox = relative(sandboxDir, resolvedPath);
             if (relToSandbox.startsWith("..") || isAbsolute(relToSandbox)) {
@@ -300,7 +411,10 @@ export class FirmwareInventoryService {
           };
 
           let dirRecord: BlackboardAssetRecord;
-          const existingDir = await this.blackboard.assets.findById(assessmentId, dirAssetId);
+          const existingDir = await this.blackboard.assets.findById(
+            assessmentId,
+            dirAssetId,
+          );
           if (existingDir.ok && existingDir.value) {
             dirRecord = existingDir.value;
           } else {
@@ -328,23 +442,61 @@ export class FirmwareInventoryService {
           const sha256 = await this.computeSha256(fullPath);
 
           // Statically inspect header (NO EXECUTION)
-          const headerInfo = await FirmwareInventoryService.inspectBinaryHeader(fullPath);
+          const headerInfo =
+            await FirmwareInventoryService.inspectBinaryHeader(fullPath);
+
+          const isShellScript =
+            headerInfo.isScript === true ||
+            /\.(sh|ash|bash|ksh)$/i.test(entry.name);
+          const isConfigFile =
+            !headerInfo.isElf &&
+            !isShellScript &&
+            (relPath.startsWith("etc/") ||
+              /\.(conf|cfg|ini|json|xml|yaml|yml|shadow|passwd)$/i.test(
+                entry.name,
+              ));
+          const isKernelOrBoot =
+            !headerInfo.isElf &&
+            (headerInfo.isKernelOrBootloader === true ||
+              relPath.startsWith("boot/") ||
+              /^(?:vmlinux|uImage|zImage|dtb|u-boot)/i.test(entry.name) ||
+              entry.name.endsWith(".dtb"));
+          const isSharedLib =
+            headerInfo.isElf &&
+            (entry.name.includes(".so") ||
+              relPath.startsWith("lib/") ||
+              relPath.startsWith("usr/lib/"));
+
+          let fileClassification: ExtractedFileClassification = "regular_file";
+          if (headerInfo.isElf) {
+            fileClassification = isSharedLib
+              ? "elf_shared_library"
+              : "elf_executable";
+          } else if (isShellScript) {
+            fileClassification = "shell_script";
+          } else if (isConfigFile) {
+            fileClassification = "configuration_file";
+          } else if (isKernelOrBoot) {
+            fileClassification = "kernel_or_bootloader_image";
+          } else if (/\.(bin|img|rom|fw|squashfs|ko|dat)$/i.test(entry.name)) {
+            fileClassification = "unknown_binary";
+          }
 
           let assetType: AssetType = "source_repository";
           if (headerInfo.isElf) {
             assetType = "compiled_binary";
-          } else if (
-            relPath.startsWith("etc/") ||
-            /\.(conf|cfg|ini|json|xml|yaml|yml)$/i.test(entry.name)
-          ) {
+          } else if (isConfigFile) {
             assetType = "cloud_configuration";
           } else if (
+            isKernelOrBoot ||
             entry.name.endsWith(".squashfs") ||
             entry.name.endsWith(".img") ||
             entry.name.endsWith(".bin")
           ) {
             assetType = "firmware_image";
           }
+
+          const shouldQueueForElfAnalysis = headerInfo.isElf === true;
 
           const fileAssetId = computeAssetId({
             name: entry.name,
@@ -368,8 +520,11 @@ export class FirmwareInventoryService {
               "extracted",
               "published",
               "classified",
-              ...(headerInfo.isExecutable ? ["queued_for_analysis", "executable"] : ["skipped"]),
-              ...(headerInfo.isElf ? ["elf"] : []),
+              fileClassification,
+              ...(shouldQueueForElfAnalysis
+                ? ["queued_for_analysis", "executable", "elf"]
+                : ["skipped"]),
+              ...(isShellScript ? ["script"] : []),
             ],
             metadata: {
               relativePath: relPath,
@@ -377,23 +532,32 @@ export class FirmwareInventoryService {
               size: fileSize,
               endianness: headerInfo.endianness,
               is64Bit: headerInfo.is64Bit,
+              elfType: headerInfo.elfType ?? null,
+              isElf: headerInfo.isElf,
+              isScript: isShellScript,
+              fileClassification,
               firmwareSha256: rootFirmwareSha256,
               rootFirmwareAssetId,
-              lifecycle_state: headerInfo.isExecutable ? "queued_for_analysis" : "classified",
+              lifecycle_state: shouldQueueForElfAnalysis
+                ? "queued_for_analysis"
+                : "classified",
               discovered: true,
               extracted: true,
               published: true,
               classified: true,
-              queued_for_analysis: headerInfo.isExecutable,
+              queued_for_analysis: shouldQueueForElfAnalysis,
               analyzed: false,
               failed: false,
-              skipped: !headerInfo.isExecutable,
+              skipped: !shouldQueueForElfAnalysis,
             },
             created_at: Date.now(),
           };
 
           let fileRecord: BlackboardAssetRecord;
-          const existingFile = await this.blackboard.assets.findById(assessmentId, fileAssetId);
+          const existingFile = await this.blackboard.assets.findById(
+            assessmentId,
+            fileAssetId,
+          );
           if (existingFile.ok && existingFile.value) {
             fileRecord = existingFile.value;
           } else {
@@ -418,7 +582,10 @@ export class FirmwareInventoryService {
                 path: relPath,
                 size: fileSize,
                 sha256,
-                isExecutable: headerInfo.isExecutable,
+                isExecutable: headerInfo.isElf === true,
+                isElf: headerInfo.isElf === true,
+                isScript: isShellScript,
+                fileClassification,
                 architecture: headerInfo.architecture,
               },
               confidence: 1.0,
@@ -434,10 +601,13 @@ export class FirmwareInventoryService {
             observationsCreated.push(existingObs.value[0]!);
           }
 
-          // Generate binary-analysis task for executables (idempotent)
-          if (headerInfo.isExecutable) {
+          // Generate binary-analysis task ONLY for genuine ELF binaries (idempotent)
+          if (headerInfo.isElf === true) {
             const taskId = `task_fw_${fileAssetId.replace(/^ast_/u, "").slice(0, 32)}`;
-            const existingTask = await this.blackboard.tasks.getById(assessmentId, taskId);
+            const existingTask = await this.blackboard.tasks.getById(
+              assessmentId,
+              taskId,
+            );
             if (existingTask.ok && existingTask.value) {
               tasksCreated.push(existingTask.value);
             } else {
@@ -538,7 +708,10 @@ export class FirmwareInventoryService {
       let bytesRead = 0;
       let pos = 0;
 
-      while ((bytesRead = (await handle.read(buffer, 0, buffer.length, pos)).bytesRead) > 0) {
+      while (
+        (bytesRead = (await handle.read(buffer, 0, buffer.length, pos))
+          .bytesRead) > 0
+      ) {
         hash.update(buffer.subarray(0, bytesRead));
         pos += bytesRead;
       }
@@ -558,7 +731,12 @@ export class FirmwareInventoryService {
     gap: {
       readonly path: string;
       readonly reason: string;
-      readonly kind: "unknown-chunk" | "encrypted" | "depth-limited" | "unsupported" | "failed";
+      readonly kind:
+        | "unknown-chunk"
+        | "encrypted"
+        | "depth-limited"
+        | "unsupported"
+        | "failed";
       readonly offset?: number;
     },
   ): Promise<Result<ObservationRecord, BlackboardError>> {
@@ -580,4 +758,3 @@ export class FirmwareInventoryService {
     });
   }
 }
-
